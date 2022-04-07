@@ -8,13 +8,14 @@ Compatible with Firefox only with dark mode settings
 
 @author Jeff Chen
 @created 4/5/2022
-@version 0.1
+@version 0.11
 """
 import time
 import keyboard
 import pyautogui as pg
 import os
 import mouse
+import numpy as np
 
 # Preliminaries
 ######################## cd to icon directory ########################
@@ -32,9 +33,13 @@ lborder = icon[0]       # leftmost border of clickable content
 
 ####################### End of Preliminaries #########################
 
-
-
-
+### Misc variables
+BORDER_COLOR = [27,27,27]       # Color of image border
+IMAGE_DIFFERENCE = 420          # Pixel difference from center of one image to next image
+NEXT_ROW = 3.5                  # Scrolls to move to next row of images
+NEXT_GRID = 6.8                 # Scrolls needed to move to next grid of images
+SCROLL_BUFFER = 0.5             # Seconds to wait for scrolling
+CURSOR_MOVE_BUFFER = 0.1        # Seconds to wait for cursor movement
 
 # TODO - multithreading could be used to instantly quit application
 print("Hold esc on keyboard to terminate", flush=True)
@@ -46,31 +51,31 @@ for i in range(0, 18):
     if keyboard.is_pressed("Esc"):
         exit()
     
-    # increment into next grid
-    for m in range(0, 5):
+    # Process one grid
+    while np.array_equal(pg.pixel(pg.position()[0], pg.position()[1]), BORDER_COLOR) == False:
 
         opos = pg.position()
-        # Processing segment
+        # Processing grid segment
         while(lborder < pg.position()[0]):
-            time.sleep(0.5)
+            time.sleep(CURSOR_MOVE_BUFFER)
             #mouse.click("middle")
             pos = pg.position()
-            mouse.move(pos[0] - 340, pos[1], True)
-            time.sleep(0.5)
+            mouse.move(pos[0] - IMAGE_DIFFERENCE, pos[1], True)
+            time.sleep(SCROLL_BUFFER)
             if keyboard.is_pressed("Esc"):
                 exit()
 
         #mouse.click("middle")
-        pos = pg.position()
         mouse.move(opos[0], opos[1], True)
 
-        if m < 4:
-            # For incrementing to next grid segment
-            mouse.wheel(1.8)
+        
+        # For incrementing to next grid segment
+        mouse.wheel(NEXT_ROW)
+        time.sleep(SCROLL_BUFFER)
 
-    time.sleep(0.1)
-    mouse.wheel(8.6)
-    time.sleep(0.5)
+    # Increment into the next grid
+    mouse.wheel(NEXT_GRID)
+    time.sleep(SCROLL_BUFFER)
 
     if keyboard.is_pressed("Esc"):
         exit()
