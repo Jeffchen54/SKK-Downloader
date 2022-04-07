@@ -9,7 +9,7 @@ Features to add ImageOpener(0.13):
 
 Features to add ImageOpener(TBA):
 - Automatic scroll calibration
-- Automatic cursor movement calibrarion
+- Automatic cursor movement calibration
 - Window boundary detection
 - Improved manual termination
 - Pause with cursor save state
