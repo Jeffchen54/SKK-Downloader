@@ -8,44 +8,43 @@ Compatible with Firefox only with dark mode settings
 
 @author Jeff Chen
 @created 4/5/2022
-@version 0.2
+@version 0.3
 
-Changelog: 0.2
-- Converted project to use Selinium for huge performance boost
-- Added initiator for selinium using custom Firefox profile
-- Automatic scrolling for image link harvesting
-- Improved tab opening (Extract links directly instead of manual clicking)
-- Added multiple flags, including demo and debug modes
-- Slowdown/error screen detection and resolution detection
+Changelog: 0.3
+- Added save functionality exploiting XPATH of image tabs
+- Changed tab system to a maximum of a single tab at a time
+- Basic functionality now possible (non mp4 and non flash)
 
 """
-import profile
 import time
-from cv2 import CALIB_CB_FAST_CHECK
 import keyboard
 import pyautogui as pg
 import os
 import mouse
 import numpy as np
 import sys
-from selenium.webdriver import Firefox
 from selenium import webdriver
-from selenium.webdriver.firefox.service import Service
+from selenium.webdriver import Firefox
+from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.firefox.options import Options
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.support import expected_conditions as EC
 import cv2
-import urllib
-
+import urllib.request
 
 # Preliminaries
 ######################## cd to icon directory ########################
+
+
 def setDir():
     os.chdir("..")
     os.chdir("icons")
-    #TODO - check file contents
+    # TODO - check file contents
 
 ################### Determine the leftmost border ###################
+
+
 def getBorder():
     icon = pg.locateOnScreen('lborder.png', confidence=0.99)
     if icon == None:
@@ -55,42 +54,55 @@ def getBorder():
 
 ####################### End of Preliminaries #########################
 
-### Misc variables
-BORDER_COLOR = [27,27,27]       # Color of image border
-ERROR_COLOR = [255,255,255]     # Border color of Sankaku error page
-WAIT_COLOR = [250,250,250]      # Border color of Sankaku please wait page
-IMAGE_DIFFERENCE = 420          # Pixel difference from center of one image to next image
+
+# Misc variables
+BORDER_COLOR = [27, 27, 27]       # Color of image border
+ERROR_COLOR = [255, 255, 255]     # Border color of Sankaku error page
+WAIT_COLOR = [250, 250, 250]      # Border color of Sankaku please wait page
+# Pixel difference from center of one image to next image
+IMAGE_DIFFERENCE = 420
 NEXT_ROW = 3.5                  # Scrolls to move to next row of images
 NEXT_GRID = 5.3                 # Scrolls needed to move to next grid of images
 SCROLL_BUFFER = 0.5             # Seconds to wait for scrolling
 CURSOR_MOVE_BUFFER = 0.1        # Seconds to wait for cursor movement
-CENTER_TOLERANCE = 35           # Pixel steps to find center point, incresing value increases speed, decreasing value too much or big results in bugs
-WINSIZE = [3840,2160]           # Size of Firefox Window
-PROFILE_PATH = r'C:/Users/chenj/AppData/Roaming/Mozilla/Firefox/Profiles/8gtgo2sw.default-release'  # Path of Firefox custom profile
-lastScreenSize = None           # Last recorded Firefox resolution (used to optimize out duplicate calculations)
-savedTopBorder = None           # Used to optimize out duplicate calculations
-debug = False                   # Debugger switch, true for additional output, false for normal output
+# Pixel steps to find center point, incresing value increases speed, decreasing value too much or big results in bugs
+CENTER_TOLERANCE = 35
+WINSIZE = [3840, 2160]           # Size of Firefox Window
+# Path of Firefox custom profile
+PROFILE_PATH = r'C:/Users/chenj/AppData/Roaming/Mozilla/Firefox/Profiles/8gtgo2sw.default-release'
+# Last recorded Firefox resolution (used to optimize out duplicate calculations)
+lastScreenSize = None
+# Debugger switch, true for additional output, false for normal output
+debug = False
 demo = False                    # True for demo mode, false for not
 clicks = 0                      # DEPRECATED
-windowsRes = None               # Resolution of Windows resolution (screen resolution)
-ffToWinRatio = None             # Ratio of Selinium firefox browser to Windows resolution
-folder = '/home/palladin/imgs'  # Download directory
+# Resolution of Windows resolution (screen resolution)
+windowsRes = None
+# Ratio of Selinium firefox browser to Windows resolution
+ffToWinRatio = None
+# Download directory (Absolute path)
+folder = r'C:/Users/chenj/Downloads/fun/img/'
+imgNo = 1
+topBorder = None
+maxTabs = 5                     # Maximum number of opened tabs
 
-def getRatio(c1:int, c2:int)->float:
+
+def getRatio(c1: int, c2: int) -> float:
     """
     Solve c1*x=c2 for x
     Pre: c1 != 0
-    Param: 
+    Param:
         c1: c1 in c1*x=c2
         c2: c2 in c1*x=c2
     Return: x in c1*x=c2
     """
     return c2/c1
-    
-def resolution_autodetect(driver:Firefox)->None:
+
+
+def resolution_autodetect(driver: Firefox) -> None:
     """
     Detects screen and full screen Selinium firefox resolution and calculates firefox resolution
-    to screen ratio. 
+    to screen ratio.
     Params:
         driver: Selinium Firefox driver
     Post: globals windowRes, ffToWinRatio, lastScreenSize updated
@@ -101,20 +113,23 @@ def resolution_autodetect(driver:Firefox)->None:
     print("Detecting resolutions, do not modify firefox window size...")
     driver.maximize_window()        # Make full screen
     time.sleep(0.5)
-    windowsRes = pg.size()          # Get screen resolution 
+    windowsRes = pg.size()          # Get screen resolution
     lastScreenSize = getWindowSize(driver)
-    ffToWinRatio = [getRatio(lastScreenSize["width"], windowsRes[0]), getRatio(lastScreenSize["height"], windowsRes[1])]
+    ffToWinRatio = [getRatio(lastScreenSize["width"], windowsRes[0]), getRatio(
+        lastScreenSize["height"], windowsRes[1])]
     print("Resolution detection completed:")
     print("Screen resolution: ", windowsRes)
     print("Firefox resolution: ", lastScreenSize)
     print("Firefox to screen ratio: ", ffToWinRatio)
-    print("Converted Firefox to screen resolution (Must be almost equal to Screen Resolution): ", lastScreenSize["width"]*ffToWinRatio[0], ", ", lastScreenSize["height"]*ffToWinRatio[1])
+    print("Converted Firefox to screen resolution (Must be almost equal to Screen Resolution): ",
+          lastScreenSize["width"]*ffToWinRatio[0], ", ", lastScreenSize["height"]*ffToWinRatio[1])
 
-def selinium_slowdown_detector(driver:Firefox)->None:
+
+def selenium_slowdown_detector(driver: Firefox) -> None:
     """
     Detects if a page contains a Sankaku error or slowdown using pixel arithmetic. If detected,
     page will be refreshed until message is no longer detected.
-    Params: 
+    Params:
         driver: Selinium Firefox driver
     Post: page no longer contains a Sankaku error or slowdown
     """
@@ -136,40 +151,117 @@ def selinium_slowdown_detector(driver:Firefox)->None:
         # Get offset (distance from FF window to inner window)
         xoffset = lastScreenSize["width"] - innerWidth
         yoffset = lastScreenSize["height"] - innerHeight
-        
+
         # Get Top right coordinate of FF inner window
-        topBorder = [(curr["x"] + lastScreenSize["width"] - xoffset) * ffToWinRatio[0], (curr["y"] + yoffset) * ffToWinRatio[1]]
+        topBorder = [(curr["x"] + lastScreenSize["width"] - xoffset)
+                      * ffToWinRatio[0], (curr["y"] + yoffset) * ffToWinRatio[1]]
 
         if(debug == True):
             print("\nREAL SIZE:\t", windowsRes)
-            print("FIREFOX SIZE:\t", lastScreenSize) # 1900, 2000
-            print("CONVERTED FF SIZE:\t", lastScreenSize["width"]*ffToWinRatio[0], ", ", lastScreenSize["height"]*ffToWinRatio[1])
+            print("FIREFOX SIZE:\t", lastScreenSize)  # 1900, 2000
+            print("CONVERTED FF SIZE:\t",
+                  lastScreenSize["width"]*ffToWinRatio[0], ", ", lastScreenSize["height"]*ffToWinRatio[1])
             print("INNER FF WINDOW:\t", innerWidth, ", ", innerHeight)
-            print("CONVERTED INNER FF: ", innerWidth * ffToWinRatio[0], ", ", innerHeight * ffToWinRatio[1])
+            print("CONVERTED INNER FF: ", innerWidth *
+                  ffToWinRatio[0], ", ", innerHeight * ffToWinRatio[1])
             print("OFFSETS: X = ", xoffset, ", y = ", yoffset)
             print("CURRENT FF POSITION: ", curr)
             print("RATIO FF TO REAL: ", ffToWinRatio)
             print("NEW FF POSITION:\t", topBorder, flush=True)
-            print("\nMOUSE MOVED TO NEW FF POSITION, CURSOR SHOULD BE TOP RIGHT CORNER BELOW BOOKMARK BAR")
+            print(
+                "\nMOUSE MOVED TO NEW FF POSITION, CURSOR SHOULD BE TOP RIGHT CORNER BELOW BOOKMARK BAR")
             mouse.move(topBorder[0], topBorder[1], True)
-    
-    elif debug == True :
+
+    elif debug == True:
         print("\nOPTIMIZING OUT CALCULATIONS")
         mouse.move(topBorder[0], topBorder[1], True)
-    
+
     # Processing pixel check for slowdown/error message
     color = pg.pixel(int(topBorder[0]), int(topBorder[1]))
     if(np.array_equal(color, ERROR_COLOR) or np.array_equal(color, WAIT_COLOR)):
         print("Error detected, refreshing page")
         driver.refresh()
+
+
+def selenium_save_image(driver: Firefox) -> None:
+    """
+    Saves the first image on the page.
+    Supports gif and png
+
+    Post: image or gif on selinium page downloaded inside folder
+    """
+    global imgNo
+    time.sleep(0.5)
+    downloaded = False
+    oldImgNo = imgNo
+    # If image exists
+    while(imgNo == oldImgNo):
+        try:
+            # Get path of image
+            l = driver.find_element(by=By.XPATH, value='//img[1]')
+            src = l.get_attribute('src')    
+
+            while(driver.current_url == "https://s.sankakucomplex.com/images/channel-dark-logo.png"):
+                driver.refresh()
+                time.sleep(3)
+                l = driver.find_element(by=By.XPATH, value='//img[1]')
+                src = l.get_attribute('src')    
+
+            # Disguised requests to trick Sankaku
+            req = urllib.request.Request(src,
+                headers = {
+                'User-agent':
+                    'Mozilla/5.0 (Windows NT 5.1; rv:43.0) Gecko/20100101 Firefox/43.0'})
+            resp = urllib.request.urlopen(req)
+
+            # Determine type of file
+            type = ".mp4"
+            if(".gif" in src):
+                type = ".gif"
+            elif(".png" in src):
+                type = ".png"
+            elif(".jpg" in src):
+                type = ".jpg"
+            elif("jpeg" in src):
+                type = ".jpeg"
+
+            # Download image 
+            with open(folder + str(imgNo) + type,"wb") as fd:
+                print("Saving: ", driver.current_url, flush=True)
+                fd.write(resp.read())
+                imgNo += 1
+        # If image does not exists
+        except:
+            selenium_resolve_slowdown(driver)
         
 
-def selinium_save_image(driver:Firefox)->None:
-    r=driver.find_elements_by_tag_name('img')
-    src = r.get_attribute("src")
-    pos = len(src) - src[::-1].index('/')
-    print (src[pos:])
-    g=urllib.urlretrieve(src, "/".join([folder, src[pos:]]))
+def selenium_resolve_slowdown(driver: Firefox) -> None:
+    """
+    Refreshes a page until content is available
+    """
+    try:
+        l = driver.find_element(by=By.XPATH, value='//img[1]')
+        src = l.get_attribute('src')   
+        req = urllib.request.Request(src,
+                headers = {
+                'User-agent':
+                    'Mozilla/5.0 (Windows NT 5.1; rv:43.0) Gecko/20100101 Firefox/43.0'})
+        resp = urllib.request.urlopen(req)
+        with open(folder + str(imgNo) + ".mp4","wb") as fd:
+            print("Saving: ", src, flush=True)
+            fd.write(resp.read())
+            imgNo += 1
+    except:
+        try:
+            print("Refreshing window - either src image not loaded correctly or error page, do not close current tab!", flush=True)
+            element = WebDriverWait(driver, 5).until(
+            EC.presence_of_element_located((By.XPATH, '//img[1]'))
+            )
+        except:
+            driver.refresh()
+            selenium_resolve_slowdown(driver)
+
+
 
 def getWindowSize(driver:Firefox)->dict:
     """
@@ -188,6 +280,7 @@ def selenium_infscroll(driver:Firefox)->None:
     Scrolls to the end of the selenium window
     DEBUG: prints old scroll height vs new scroll height
     """
+    print("Scrolling...", flush=True)
     SCROLL_PAUSE_TIME = 2
     html = driver.find_element_by_tag_name('html')
 
@@ -211,12 +304,13 @@ def selenium_infscroll(driver:Firefox)->None:
         last_height = new_height
 
     time.sleep(SCROLL_PAUSE_TIME)
-    print("Scrolling completed")
+    print("Scrolling completed", flush=True)
 
 def selenium_init()->Firefox:
     """
     Initializes and opens a selinium Firefox window with custom profile path PROFILE_PATH
     """
+    print("Initializing Selenium, please wait...", flush=True)
     opt=Options()
     opt.add_argument("-profile")
     opt.add_argument(PROFILE_PATH)
@@ -226,7 +320,6 @@ def selenium_init()->Firefox:
 def selenium_visit(driver:Firefox)->None:
     """
     Opens all content urls from https://chan.sankakucomplex.com in another tab
-
     Pre: On page on sankakucomplex
     Post: All content urls opened in another tab, original tab returned to
     BUGS: issue where js scripts ran using Tampermonkey extension fail to activate on home page of sankakucomplex
@@ -244,19 +337,146 @@ def selenium_visit(driver:Firefox)->None:
             selenium_infscroll(driver)
             time.sleep(0.5)
             if demo == False:
-                p = driver.current_window_handle()
+                p = driver.current_window_handle
                 for a in driver.find_elements(by=By.XPATH, value='.//a'):
                     if("https://chan.sankakucomplex.com/post/show/" in a.get_attribute('href')):
-                        print("Opening: ", a.get_attribute('href'))
+                        print("Opening: ", a.get_attribute('href'), flush=True)
                         driver.execute_script('window.open("{}","_blank");'.format(a.get_attribute('href')))
+                        time.sleep(3)
+                        driver.switch_to.window(driver.window_handles[1])
+                        selenium_save_image(driver)
+                        driver.close()
+                        driver.switch_to.window(driver.window_handles[0])
                         time.sleep(0.5)
-                driver.switch_to.window(p)  
             cont = False
     
-    print("All tabs opened")
+def main():
+    global debug
+    global demo
 
+    # argv
+    if(len(sys.argv) > 1):
+        if(sys.argv[1][0] == '-'):
+            if("-d" == sys.argv[1]):
+                print("Demo mode has been selected. Images will not be opened but other interactions will still be enabled")
+                demo = True
+            elif("-DBUG_CTR" == sys.argv[1]):
+                debug = True
+                print("RUNNING 1 ITERATION OF CENTER_CURSOR")
+                center_cursor()
+                print("DBUG COMPLETED")
+                exit()
+            elif("-DBUG_WINSZ" == sys.argv[1]):
+                print("CHECKING FIREFOX WINDOW SIZE")
+                driver = selenium_init()
+                print(getWindowSize(driver))
+                print("DBUG COMPLETED")
+                driver.quit()
+                exit()
+            elif("-DBUG_WIN" == sys.argv[1]):
+                print("OPENING SELINIUM WINDOW WITH CUSTOM PROFILE AT: ", PROFILE_PATH)
+                selenium_init()
+                print("DBUG COMPLETED")
+                exit()
+            elif("-DBUG_SEARCHWIN" == sys.argv[1]):
+                print("SEARCHING IN SELINIUM WINDOW WITH CUSTOM PROFILE")
+                demo = True
+                debug = True
+                driver  = selenium_init()
+                selenium_visit(driver)
+
+                while(input("Continue? y or n>") != 'n'):
+                    selenium_visit(driver)
+                print("DBUG COMPLETED")
+                driver.quit()
+                exit()
+            elif("-DBUG_SAVE" == sys.argv[1]):
+                demo = True
+                debug = True
+                print("TESTING SAVING")
+                driver = selenium_init()
+                resolution_autodetect(driver)
+                while(input("Detect? y or n>") != 'n'):
+                    selenium_slowdown_detector(driver)
+                    selenium_save_image(driver)
+                driver.quit()
+                exit()
+            else:
+                print("\nInvocation: python ImageOpenor.py <switch>")
+                print("\nSwitches")
+                print("-h           Help")
+                print("-d           Demo mode")
+                print("\n\nDebug switches:\n-DBUG_CTR    Tests center cursor")
+                print("-DBUG_WINSZ  Get current selinium Firefox window size")
+                print("-DBUG_WIN    Open a selinium Firefox window with custom profile settings")
+                print("DBUG_SEARCHWIN   Open a selinium Firefox with website searching and prep in demo mode")
+                exit()
+                
+    print("ImagesDownloader 0.3, by Jeff Chen 4/15/2022", flush=True)
+    print("Warning: Please only operate in the console you have chosen to use. If you need to look up a tab, please use only the first tab or separate browser", flush=True)
+    print("Current restrictions", flush=True)
+    print("1) Only images or gifs work, flash game downloads or any videos will not work", flush=True)
+    print("2) Requires TamperMonkey add-on and Handy Image script", flush=True)
+    print("3) Cannot pause execution, can only end program by closing out of terminal or ctrl-c in some circumstances (ctrl-z may be able to pause effectively but untested)", flush=True)
+    print("4) Only tested on Windows 10, other OS not tested", flush=True)
+    print("5) You are free to use your cursor during execution, program does not rely on keyboard or mouse; however, do not touch Selenium browser after you've inputted a valid url\n", flush=True)
+    print("6) Images are downloaded in order first to last, use 'order:id' tag to get downloads in correct order", flush=True)
+
+    driver = selenium_init()
+    selenium_visit(driver)
+    time.sleep(0.5)
+    print(imgNo - 1, " images saved to ", folder)
+    print("Exiting Selenium...")
+    driver.quit()
+
+    
+
+    '''rows = 0    # counter of  number of rows processed
+    setDir()    # set relative directory to icons
+    lborder = getBorder()   # get leftmost border of content
+
+    print("While program is in progress, DO NOT MOVE YOUR CURSOR")
+    print("Hold ESC on your keyboard to terminate", flush=True)
+
+    if keyboard.is_pressed("Esc"):
+        exit()
+
+    terminate = pg.locateOnScreen('terminate_icon.png', confidence=0.3)
+    # Keeps running until termination icon is visable
+    while True:
+
+        opos = pg.position()   
+        processRow(lborder, demo)
+        rows = rows + 1
+        # mouse.click("middle")
+        mouse.move(opos[0], opos[1], True)
+
+        
+        # For incrementing to next grid segment
+        mouse.wheel(NEXT_ROW)
+        time.sleep(SCROLL_BUFFER)
+
+        # Increment into next grid if needed
+        if np.array_equal(pg.pixel(pg.position()[0], pg.position()[1]), BORDER_COLOR):
+            mouse.wheel(NEXT_GRID)
+            time.sleep(SCROLL_BUFFER)
+
+        # Process last row on screen once terminate icon is spotted
+        terminate = pg.locateOnScreen('terminate_icon.png', confidence=0.4)
+        if(terminate != None):
+            if(rows != 1):
+                processRow(lborder)
+                rows = rows + 1
+            break               # Hate using break but need do-while loop not available in python
+
+    print("Terminating on termination logo, CLICKS: ", clicks, " Rows: ", rows)'''
+
+######################## DEPRECATED/UNUSED ########################
 def selenium_download(driver:Firefox)->None:
     """
+    Deprecated by selenium_save_image which downloads images without any cursor action
+    and much faster
+
     Downloads image 
     """
     # Preliminaries
@@ -325,113 +545,6 @@ def selenium_download(driver:Firefox)->None:
 
     print("Program terminating on completion")
 
-def main():
-    global debug
-    global demo
-
-    # argv
-    if(len(sys.argv) > 1):
-        if(sys.argv[1][0] == '-'):
-            if("-d" == sys.argv[1]):
-                print("Demo mode has been selected. Images will not be opened but other interactions will still be enabled")
-                demo = True
-            elif("-DBUG_CTR" == sys.argv[1]):
-                debug = True
-                print("RUNNING 1 ITERATION OF CENTER_CURSOR")
-                center_cursor()
-                print("DBUG COMPLETED")
-                exit()
-            elif("-DBUG_WINSZ" == sys.argv[1]):
-                print("CHECKING FIREFOX WINDOW SIZE")
-                driver = selenium_init()
-                print(getWindowSize(driver))
-                print("DBUG COMPLETED")
-                driver.quit()
-                exit()
-            elif("-DBUG_WIN" == sys.argv[1]):
-                print("OPENING SELINIUM WINDOW WITH CUSTOM PROFILE AT: ", PROFILE_PATH)
-                selenium_init()
-                print("DBUG COMPLETED")
-                exit()
-            elif("-DBUG_SEARCHWIN" == sys.argv[1]):
-                print("SEARCHING IN SELINIUM WINDOW WITH CUSTOM PROFILE")
-                demo = True
-                debug = True
-                driver  = selenium_init()
-                selenium_visit(driver)
-
-                while(input("Continue? y or n>") != 'n'):
-                    selenium_visit(driver)
-                print("DBUG COMPLETED")
-                driver.quit()
-                exit()
-            elif("-DBUG_SAVE" == sys.argv[1]):
-                demo = True
-                debug = True
-                print("TESTING SAVING")
-                driver = selenium_init()
-                resolution_autodetect(driver)
-                while(input("Detect? y or n>") != 'n'):
-                    selinium_slowdown_detector(driver)
-                    selinium_save_image(driver)
-                driver.quit()
-                exit()
-            else:
-                print("\nInvocation: python ImageOpenor.py <switch>")
-                print("\nSwitches")
-                print("-h           Help")
-                print("-d           Demo mode")
-                print("\n\nDebug switches:\n-DBUG_CTR    Tests center cursor")
-                print("-DBUG_WINSZ  Get current selinium Firefox window size")
-                print("-DBUG_WIN    Open a selinium Firefox window with custom profile settings")
-                print("DBUG_SEARCHWIN   Open a selinium Firefox with website searching and prep in demo mode")
-                exit()
-                
-
-
-    rows = 0    # counter of  number of rows processed
-    setDir()    # set relative directory to icons
-    lborder = getBorder()   # get leftmost border of content
-
-    print("While program is in progress, DO NOT MOVE YOUR CURSOR")
-    print("Hold ESC on your keyboard to terminate", flush=True)
-
-    if keyboard.is_pressed("Esc"):
-        exit()
-
-
-    terminate = pg.locateOnScreen('terminate_icon.png', confidence=0.3)
-
-    # Keeps running until termination icon is visable
-    while True:
-
-        opos = pg.position()   
-        processRow(lborder, demo)
-        rows = rows + 1
-        #mouse.click("middle")
-        mouse.move(opos[0], opos[1], True)
-
-        
-        # For incrementing to next grid segment
-        mouse.wheel(NEXT_ROW)
-        time.sleep(SCROLL_BUFFER)
-
-        # Increment into next grid if needed
-        if np.array_equal(pg.pixel(pg.position()[0], pg.position()[1]), BORDER_COLOR):
-            mouse.wheel(NEXT_GRID)
-            time.sleep(SCROLL_BUFFER)
-
-        # Process last row on screen once terminate icon is spotted
-        terminate = pg.locateOnScreen('terminate_icon.png', confidence=0.4)
-        if(terminate != None):
-            if(rows != 1):
-                processRow(lborder)
-                rows = rows + 1
-            break               # Hate using break but need do-while loop not available in python
-
-    print("Terminating on termination logo, CLICKS: ", clicks, " Rows: ", rows)
-
-######################## DEPRECATED/UNUSED ########################
 def moving_detector():
     """
     Unused for now
