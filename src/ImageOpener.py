@@ -8,12 +8,10 @@ Compatible with Firefox only with dark mode settings
 
 @author Jeff Chen
 @created 4/5/2022
-@version 0.3
+@version 0.4
 
-Changelog: 0.3
-- Added save functionality exploiting XPATH of image tabs
-- Changed tab system to a maximum of a single tab at a time
-- Basic functionality now possible (non mp4 and non flash)
+Changelog: 0.4
+- Added .mp4 download functionality
 
 """
 import time
@@ -197,69 +195,71 @@ def selenium_save_image(driver: Firefox) -> None:
     # If image exists
     while(imgNo == oldImgNo):
         try:
-            # Get path of image
-            l = driver.find_element(by=By.XPATH, value='//img[1]')
-            src = l.get_attribute('src')    
-
-            while(driver.current_url == "https://s.sankakucomplex.com/images/channel-dark-logo.png"):
-                driver.refresh()
-                time.sleep(3)
+            l = deo = driver.find_element(By.XPATH, '/html/body/div[4]/div/div[2]/div[3]/video')
+            src = l.get_attribute('src')   
+            req = urllib.request.Request(src,
+            headers = {
+                'User-agent':
+                'Mozilla/5.0 (Windows NT 5.1; rv:43.0) Gecko/20100101 Firefox/43.0'})
+            resp = urllib.request.urlopen(req)
+            with open(folder + str(imgNo) + ".mp4","wb") as fd:
+                print("Saving: ", src, flush=True)
+                fd.write(resp.read())
+                imgNo += 1
+        except:
+            try:
+                # Get path of image
                 l = driver.find_element(by=By.XPATH, value='//img[1]')
                 src = l.get_attribute('src')    
 
-            # Disguised requests to trick Sankaku
-            req = urllib.request.Request(src,
-                headers = {
-                'User-agent':
-                    'Mozilla/5.0 (Windows NT 5.1; rv:43.0) Gecko/20100101 Firefox/43.0'})
-            resp = urllib.request.urlopen(req)
+                while(driver.current_url == "https://s.sankakucomplex.com/images/channel-dark-logo.png"):
+                    driver.refresh()
+                    time.sleep(3)
+                    l = driver.find_element(by=By.XPATH, value='//img[1]')
+                    src = l.get_attribute('src')    
 
-            # Determine type of file
-            type = ".mp4"
-            if(".gif" in src):
-                type = ".gif"
-            elif(".png" in src):
-                type = ".png"
-            elif(".jpg" in src):
-                type = ".jpg"
-            elif("jpeg" in src):
-                type = ".jpeg"
+                # Disguised requests to trick Sankaku
+                req = urllib.request.Request(src,
+                    headers = {
+                    'User-agent':
+                        'Mozilla/5.0 (Windows NT 5.1; rv:43.0) Gecko/20100101 Firefox/43.0'})
+                resp = urllib.request.urlopen(req)
 
-            # Download image 
-            with open(folder + str(imgNo) + type,"wb") as fd:
-                print("Saving: ", driver.current_url, flush=True)
-                fd.write(resp.read())
-                imgNo += 1
-        # If image does not exists
-        except:
-            selenium_resolve_slowdown(driver)
+                # Determine type of file
+                type = ".mp4"
+                if(".gif" in src):
+                    type = ".gif"
+                elif(".png" in src):
+                    type = ".png"
+                elif(".jpg" in src):
+                    type = ".jpg"
+                elif("jpeg" in src):
+                    type = ".jpeg"
+
+                # Download image 
+                with open(folder + str(imgNo) + type,"wb") as fd:
+                    print("Saving: ", driver.current_url, flush=True)
+                    fd.write(resp.read())
+                    imgNo += 1
+            # If image does not exists
+            except:
+                selenium_resolve_slowdown(driver)
         
 
 def selenium_resolve_slowdown(driver: Firefox) -> None:
     """
     Refreshes a page until content is available
     """
+    
+
     try:
-        l = driver.find_element(by=By.XPATH, value='//img[1]')
-        src = l.get_attribute('src')   
-        req = urllib.request.Request(src,
-                headers = {
-                'User-agent':
-                    'Mozilla/5.0 (Windows NT 5.1; rv:43.0) Gecko/20100101 Firefox/43.0'})
-        resp = urllib.request.urlopen(req)
-        with open(folder + str(imgNo) + ".mp4","wb") as fd:
-            print("Saving: ", src, flush=True)
-            fd.write(resp.read())
-            imgNo += 1
+        print("Refreshing window - either src image not loaded correctly or error page, do not close current tab!", flush=True)
+        element = WebDriverWait(driver, 5).until(
+        EC.presence_of_element_located((By.XPATH, '//img[1]'))
+        )
     except:
-        try:
-            print("Refreshing window - either src image not loaded correctly or error page, do not close current tab!", flush=True)
-            element = WebDriverWait(driver, 5).until(
-            EC.presence_of_element_located((By.XPATH, '//img[1]'))
-            )
-        except:
-            driver.refresh()
-            selenium_resolve_slowdown(driver)
+        driver.refresh()
+        selenium_resolve_slowdown(driver)
 
 
 
