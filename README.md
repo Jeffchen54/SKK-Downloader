@@ -16,6 +16,12 @@ Requirements:
 
 ## Changelog:
 
+ImageOpener(0.6) 4/17/2022
+- Ability to pause or terminate execution between downloads
+- Use post ids as filename
+- Advanced checking of duplicate files by name
+- Added time running
+
 ImageOpener(0.5) 4/17/2022
 - Added .swf download functionality
 - Removed all flags as they did not apply for selenium functionality
