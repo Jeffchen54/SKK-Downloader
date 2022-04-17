@@ -51,11 +51,8 @@ ImageOpener(0.2) 4/15/2022:
 As of now, ImageOpener is not functional
 
 Features to add ImageOpener(TBA):
-- Improved manual termination
-- Pause with save state 
 - Bypass for 2000 file limit
 - Optional logging to file 
-- Helpful global variables to toggle
 
 Features to add in general:
 - Guide to download and setup downloader
