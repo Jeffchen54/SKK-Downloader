@@ -18,6 +18,7 @@ Requirements:
 
 ImageOpener(0.5) 4/17/2022
 - Added .swf download functionality
+- Removed all flags as they did not apply for selenium functionality
 
 General update 4/17/2022
 - Removed all unused files from repo
