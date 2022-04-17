@@ -16,6 +16,9 @@ Requirements:
 
 ## Changelog:
 
+ImageOpener(0.5) 4/17/2022
+- Added .swf download functionality
+
 General update 4/17/2022
 - Removed all unused files from repo
 
