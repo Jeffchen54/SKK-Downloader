@@ -14,7 +14,8 @@ Requirements:
 - Windows 10 (may work on other versions but tested only on Windows 10
 
 
-Changelog:
+## Changelog:
+
 General update 4/17/2022
 - Removed all unused files from repo
 
