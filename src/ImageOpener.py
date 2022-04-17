@@ -8,11 +8,15 @@ Compatible with Firefox only with dark mode settings
 
 @author Jeff Chen
 @created 4/5/2022
+@modified 4/17/2022
 @version 0.4
 
-Changelog: 0.4
-- Added .mp4 download functionality
-- Added logging for failed downloads
+
+Future:
+- append url to download names
+- Logging
+- Removing and cleaning up code
+- .swf files
 
 """
 import time
@@ -33,7 +37,8 @@ from selenium.webdriver.support import expected_conditions as EC
 import cv2
 import urllib.request
 from selenium.common.exceptions import TimeoutException
-
+import copy
+from queue import Queue
 
 # Preliminaries
 ######################## cd to icon directory ########################
@@ -83,11 +88,12 @@ windowsRes = None
 # Ratio of Selinium firefox browser to Windows resolution
 ffToWinRatio = None
 # Download directory (Absolute path)
-folder = r'C:/Users/chenj/Downloads/fun/img/'
+folder = r'C:/Users/chenj/Downloads/fun/img/photos/'
 imgNo = 1
 failed = 0
 topBorder = None
 maxTabs = 5                     # Maximum number of opened tabs
+driver = None
 
 
 def getRatio(c1: int, c2: int) -> float:
@@ -185,8 +191,14 @@ def selenium_slowdown_detector(driver: Firefox) -> None:
         print("Error detected, refreshing page")
         driver.refresh()
 
+def selenium_reinit(driver:Firefox, url:str)->Firefox:
+    driver.quit()                   # Exit old driver
+    driver = selenium_init()        # Create another driver
+    driver.execute_script('window.open("{}","_blank");'.format(url))    # Open url in another tab
+    driver.switch_to.window(driver.window_handles[1])   # Switch to the tab with content
+    return driver
 
-def selenium_save_image(driver: Firefox) -> None:
+def selenium_save_image(driver: Firefox, url:str) -> Firefox:
     """
     Saves the first image on the page.
     Supports gif and png
@@ -196,14 +208,18 @@ def selenium_save_image(driver: Firefox) -> None:
     global imgNo
     downloaded = False
     oldImgNo = imgNo
+    timeout = 0
     # If image exists
     while(imgNo == oldImgNo):
         time.sleep(1)
+        if(timeout == 5):
+            driver = selenium_reinit(driver, url)
+            timeout = 0
         #mp4
         try:
             try:
                 #l = deo = driver.find_element(By.XPATH, '/html/body/div[4]/div/div[2]/div[3]/video') 
-                l = deo = driver.find_element(By.XPATH, '//video') 
+                l = driver.find_element(By.XPATH, '//video') 
                 src = l.get_attribute('src')   
                 if("https://chan.sankakucomplex.com/post/show/" in src):
                     file1 = open("C:/Users/chenj/Downloads/fun/img/log.txt", "a")  # append mode
@@ -217,7 +233,7 @@ def selenium_save_image(driver: Firefox) -> None:
                         'User-agent':
                         'Mozilla/5.0 (Windows NT 5.1; rv:43.0) Gecko/20100101 Firefox/43.0'})
                     resp = urllib.request.urlopen(req)
-                    with open(folder + str(imgNo)+".mp4","wb") as fd:
+                    with open(folder + str(imgNo) + ".mp4","wb") as fd:
                         print("Saving: ", src, flush=True)
                         fd.write(resp.read())
                         imgNo += 1
@@ -253,28 +269,31 @@ def selenium_save_image(driver: Firefox) -> None:
                             print("Saving: ", src, flush=True)
                             fd.write(resp.read())
                             imgNo += 1
+                            
                 # If image does not exists
                 except:
-                    selenium_resolve_slowdown(driver)
+                    selenium_resolve_slowdown(driver, url)
+                    timeout += 1
         except TimeoutException as ex:
             isrunning = 0
             print("Exception has been thrown. " + str(ex))
-            selenium_resolve_slowdown(driver)
+            selenium_resolve_slowdown(driver, url)
+            timeout += 1
+    return driver
     
 
-def selenium_resolve_slowdown(driver: Firefox) -> None:
+def selenium_resolve_slowdown(driver: Firefox, url:str) -> None:
     """
     Refreshes a page 
     """
     try:
-        print("No content detected, closing and reopening window: ", driver.current_url, flush=True)
-        url = driver.current_url
+        print("No content detected, closing and reopening window: ", url, flush=True)
         driver.get(url)     # Reopen page
         time.sleep(15)
     except TimeoutException as ex:
         isrunning = 0
         print("Exception has been thrown. " + str(ex))
-        selenium_resolve_slowdown(driver)
+        selenium_resolve_slowdown(driver, url)
 
 
 
@@ -307,10 +326,18 @@ def selenium_infscroll(driver:Firefox)->None:
         # Scroll down to bottom
         html.send_keys(Keys.PAGE_DOWN)
         html.send_keys(Keys.PAGE_DOWN)
-        time.sleep(0.5)
+        time.sleep(SCROLL_PAUSE_TIME)
         html.send_keys(Keys.PAGE_DOWN)
         html.send_keys(Keys.PAGE_DOWN)
-        # Wait to load page
+        time.sleep(SCROLL_PAUSE_TIME)
+        html.send_keys(Keys.PAGE_DOWN)
+        html.send_keys(Keys.PAGE_DOWN)
+        time.sleep(SCROLL_PAUSE_TIME)
+        html.send_keys(Keys.PAGE_DOWN)
+        html.send_keys(Keys.PAGE_DOWN)
+        time.sleep(SCROLL_PAUSE_TIME)
+        html.send_keys(Keys.PAGE_DOWN)
+        html.send_keys(Keys.PAGE_DOWN)
         time.sleep(SCROLL_PAUSE_TIME)
 
         # Calculate new scroll height and compare with last scroll height
@@ -337,7 +364,13 @@ def selenium_init()->Firefox:
     driver.set_page_load_timeout(15)
     return driver
 
-def selenium_visit(driver:Firefox)->None:
+def exists(dir, substr:str)->bool:
+    for entry in dir:
+        if(entry.is_file() and substr in entry.name):
+            return True
+    return False
+
+def selenium_visit(driver:Firefox)->Firefox:
     """
     Opens all content urls from https://chan.sankakucomplex.com in another tab
     Pre: On page on sankakucomplex
@@ -345,7 +378,7 @@ def selenium_visit(driver:Firefox)->None:
     BUGS: issue where js scripts ran using Tampermonkey extension fail to activate on home page of sankakucomplex
     """
     cont = True
-
+    global imgNo
     while(cont == True):
         print("Type the sankaku url you want to visit:")
         url = input("URL> ")
@@ -357,19 +390,32 @@ def selenium_visit(driver:Firefox)->None:
             selenium_infscroll(driver)
             time.sleep(1)
             if demo == False:
-                p = driver.current_window_handle
-                for a in driver.find_elements(by=By.XPATH, value='.//a'):
-                    if("https://chan.sankakucomplex.com/post/show/" in a.get_attribute('href')):
-                        print("Opening: ", a.get_attribute('href'), flush=True)
-                        driver.execute_script('window.open("{}","_blank");'.format(a.get_attribute('href')))
-                        time.sleep(3)
-                        driver.switch_to.window(driver.window_handles[1])
-                        selenium_save_image(driver)
-                        driver.close()
-                        driver.switch_to.window(driver.window_handles[0])
-                        time.sleep(0.5)
+                # Get starting index
+                numParsed = len(next(os.walk(folder))[2])
+                imgNo = numParsed + 1
+                print("Processing urls and removing duplicate files...", flush=True)
+                # Make a deep copy of all urls. 
+                urls = driver.find_elements(by=By.XPATH, value='.//a')
+                linkQ = Queue(-1)
+                dir = os.scandir(folder)
+                for a in urls:
+                    link = a.get_attribute('href')
+                    if("https://chan.sankakucomplex.com/post/show/" in link and not exists(dir, link)):
+                        linkQ.put(link)
+                print(linkQ.qsize(), " items to be processed", flush=True)
+                # Process each url and save their image if is valid
+                while(linkQ.empty() == False):
+                    url = str(linkQ.get())
+                    print("Opening: ", url, flush=True)
+                    driver.execute_script('window.open("{}","_blank");'.format(url))
+                    time.sleep(3)
+                    driver.switch_to.window(driver.window_handles[1])
+                    driver = selenium_save_image(driver, url)
+                    driver.close()
+                    driver.switch_to.window(driver.window_handles[0])
+                    time.sleep(0.5)
             cont = False
-        
+    return driver
     
 def main():
     global debug
@@ -442,9 +488,10 @@ def main():
     print("4) Only tested on Windows 10, other OS not tested", flush=True)
     print("5) You are free to use your cursor during execution, program does not rely on keyboard or mouse; however, do not touch Selenium browser after you've inputted a valid url\n", flush=True)
     print("6) Images are downloaded in order first to last, use 'order:id' tag to get downloads in correct order", flush=True)
+    print("7) Note that there is a 100 page limit for free users (2000 imgs), check page depth workaround here -> https://forum.sankakucomplex.com/t/important-dont-purchase-sankaku-plus-yet-heres-why-addressing-sankaku-issues-29-days-and-not-fixed/18209/61", flush=True)
 
     driver = selenium_init()
-    selenium_visit(driver)
+    driver = selenium_visit(driver)
     time.sleep(0.5)
     print(imgNo - 1, " images saved to ", folder)
     print(failed, " failed, urls saved in log.txt")
