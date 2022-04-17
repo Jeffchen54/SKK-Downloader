@@ -4,6 +4,9 @@ Project used to play around with python and file control system.
 
 
 Changelog:
+General update 4/17/2022
+- Removed all unused files from repo
+
 ImageOpener(0.4) 4/17/2022
 - Added .mp4 download functionality
 - Added skip which skips number of urls equal to number of files in download directory (will be replaced)
