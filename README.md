@@ -45,6 +45,7 @@ Features to add ImageOpener(TBA):
 - Bypass for 2000 file limit
 - .swf download functionality
 - Optional logging to file 
+- Helpful global variables to toggle
 
 Features to add in general:
 - Guide to download and setup downloader
