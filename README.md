@@ -4,6 +4,13 @@
 Description:
 Project used to play around with python and download from Sankaku while bypassing numerous methods employed by Sankaku. Method is slower than other mass downloaders and only compatible with https://chan.sankakucomplex.com/
 
+Functionality:
+- Downloads all images, videos, and flash games from a given page while bypassing download prevention methods
+- Sets post id as downloaded file filenames
+- Ignores previous downloaded photos (if they were downloaded using this program)
+- Custom directory
+- Pause execution between downloads by pressing and holding "alt"
+
 Requirements:
 - Selinium-python for Firefox: https://selenium-python.readthedocs.io/installation.html
 - urllib3: https://pypi.org/project/urllib3/
