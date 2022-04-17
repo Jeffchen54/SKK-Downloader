@@ -48,7 +48,6 @@ Features to add ImageOpener(TBA):
 - Improved manual termination
 - Pause with save state 
 - Bypass for 2000 file limit
-- .swf download functionality
 - Optional logging to file 
 - Helpful global variables to toggle
 
