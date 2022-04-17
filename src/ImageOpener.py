@@ -9,18 +9,10 @@ Compatible with Firefox only with dark mode settings
 @author Jeff Chen
 @created 4/5/2022
 @modified 4/17/2022
-@version 0.5
-
-changelog (0.5):
-- Added flash download functionality
-
-Future:
-- append url to download names
-- Logging
-- .swf files
-
+@version 0.6
 """
 import time
+from datetime import timedelta
 import os
 from selenium import webdriver
 from selenium.webdriver import Firefox
@@ -30,11 +22,17 @@ from selenium.webdriver.common.keys import Keys
 import urllib.request
 from selenium.common.exceptions import TimeoutException
 from queue import Queue
+import keyboard
 
 
-########################## MODIFY THESE 2 VARIABLES ONLY ##############################################
-PROFILE_PATH = r'C:/Users/chenj/AppData/Roaming/Mozilla/Firefox/Profiles/8gtgo2sw.default-release'
-folder = r'C:/Users/chenj/Downloads/fun/img/photos/sample/'
+########################## REQUIRED VARIABLES ########################################
+PROFILE_PATH = r'C:/Users/chenj/AppData/Roaming/Mozilla/Firefox/Profiles/8gtgo2sw.default-release'      # Absolute path to Firefox profile
+folder = r'C:/Users/chenj/Downloads/fun/img/photos/sample/'                                             # folder to save content to
+########################## SETTING VARIABLES ########################################
+MAXNUMTIMEOUT = 5           # Maximum number of times a window can timeout before using failsafe measures
+SCROLL_PAUSE_TIME = 2       # Time between scrolls for infscroll
+SCROLLSPERCYCLE = 5         # Number of scrolls per cycle for infscroll
+PAUSEKEY = "alt"            # Key to pause program between downloads
 #######################################################################################################
 # Starting count of images (affected by number of files in folder)
 imgNo = 1
@@ -44,6 +42,9 @@ def selenium_reinit(driver: Firefox, url: str) -> Firefox:
     """
     Quits driver and initializes another driver using selenium_init()
     In new driver, open url in new tab and switch to that tab
+
+    In visual studios, code is shown as unreachable, however,
+    this is wrong and the code actually runs
 
     Param: 
         driver: driver to reinitialize
@@ -58,6 +59,17 @@ def selenium_reinit(driver: Firefox, url: str) -> Firefox:
     # Switch to the tab with content
     driver.switch_to.window(driver.window_handles[1])
     return driver
+
+def keypress_pause(driver:Firefox)->None:
+    """
+    Pauses program execution when a key is currently being pressed, entering a key to proceed
+    """
+    if(keyboard.is_pressed(PAUSEKEY)):
+        a = input("Enter 'y' to continue or 'n' to end> ")
+        while(a != 'y'):
+            if(a == 'n'):
+                driver.quit()
+                exit()
 
 
 def selenium_save_image(driver: Firefox, url: str) -> Firefox:
@@ -90,7 +102,7 @@ def selenium_save_image(driver: Firefox, url: str) -> Firefox:
     # If image exists
     while(imgNo == oldImgNo):
         time.sleep(1)
-        if(timeout == 5):
+        if(timeout == MAXNUMTIMEOUT):
             driver = selenium_reinit(driver, url)
             timeout = 0
         try:
@@ -103,7 +115,7 @@ def selenium_save_image(driver: Firefox, url: str) -> Firefox:
                                                  'User-agent':
                                                  'Mozilla/5.0 (Windows NT 5.1; rv:43.0) Gecko/20100101 Firefox/43.0'})
                 resp = urllib.request.urlopen(req)
-                with open(folder + str(imgNo) + ".mp4", "wb") as fd:
+                with open(folder + strip_sankaku_postid(url) + ".mp4", "wb") as fd:
                     print("Saving: ", src, flush=True)
                     fd.write(resp.read())
                     imgNo += 1
@@ -117,7 +129,7 @@ def selenium_save_image(driver: Firefox, url: str) -> Firefox:
                                                      'User-agent':
                                                      'Mozilla/5.0 (Windows NT 5.1; rv:43.0) Gecko/20100101 Firefox/43.0'})
                     resp = urllib.request.urlopen(req)
-                    with open(folder + str(imgNo) + ".swf", "wb") as fd:
+                    with open(folder + strip_sankaku_postid(url) + ".swf", "wb") as fd:
                         print("Saving: ", src, flush=True)
                         fd.write(resp.read())
                         imgNo += 1
@@ -151,7 +163,7 @@ def selenium_save_image(driver: Firefox, url: str) -> Firefox:
                                 type = ".jpeg"
 
                             # Download image
-                            with open(folder + str(imgNo) + type, "wb") as fd:
+                            with open(folder + strip_sankaku_postid(url) + type, "wb") as fd:
                                 print("Saving: ", src, flush=True)
                                 fd.write(resp.read())
                                 imgNo += 1
@@ -161,17 +173,23 @@ def selenium_save_image(driver: Firefox, url: str) -> Firefox:
                         selenium_resolve_slowdown(driver, url)
                         timeout += 1
         except TimeoutException:
+            timeout += 1
             print("Timeout has occured - Timeout counter: " + timeout)
             selenium_resolve_slowdown(driver, url)
-            timeout += 1
     return driver
 
+def strip_sankaku_postid(url:str):
+    """
+    Strips a sankaku url and returns the post id referred to by the url
+    """
+    tokens = url.split("/")
+    return tokens[len(tokens)-1]
 
 def selenium_resolve_slowdown(driver: Firefox, url: str) -> None:
     """
     Resolves a situation where no content has been detected by refreshing the current page
     and waiting some time
-    
+
     Param:
         driver: selenium browser to refresh
         url: url of page to regresh
@@ -193,7 +211,6 @@ def selenium_infscroll(driver: Firefox) -> None:
         driver: selenium window to scroll to the bottom of
     """
     print("Scrolling...", flush=True)
-    SCROLL_PAUSE_TIME = 2
     html = driver.find_element_by_tag_name('html')
 
     # Get scroll height
@@ -202,21 +219,10 @@ def selenium_infscroll(driver: Firefox) -> None:
 
     while True:
         # Scroll down to bottom, multiple scrolls done just in case
-        html.send_keys(Keys.PAGE_DOWN)
-        html.send_keys(Keys.PAGE_DOWN)
-        time.sleep(SCROLL_PAUSE_TIME)
-        html.send_keys(Keys.PAGE_DOWN)
-        html.send_keys(Keys.PAGE_DOWN)
-        time.sleep(SCROLL_PAUSE_TIME)
-        html.send_keys(Keys.PAGE_DOWN)
-        html.send_keys(Keys.PAGE_DOWN)
-        time.sleep(SCROLL_PAUSE_TIME)
-        html.send_keys(Keys.PAGE_DOWN)
-        html.send_keys(Keys.PAGE_DOWN)
-        time.sleep(SCROLL_PAUSE_TIME)
-        html.send_keys(Keys.PAGE_DOWN)
-        html.send_keys(Keys.PAGE_DOWN)
-        time.sleep(SCROLL_PAUSE_TIME)
+        for i in range(0,SCROLLSPERCYCLE):
+            html.send_keys(Keys.PAGE_DOWN)
+            html.send_keys(Keys.PAGE_DOWN)
+            time.sleep(SCROLL_PAUSE_TIME)
 
         # Calculate new scroll height and compare with last scroll height
         new_height = driver.execute_script(
@@ -281,14 +287,19 @@ def selenium_visit(driver: Firefox) -> Firefox:
             # Make a deep copy of all urls.
             urls = driver.find_elements(by=By.XPATH, value='.//a')
             linkQ = Queue(-1)
-            dir = os.scandir(folder)
+            dir = os.scandir(folder)        # Everything in folder
             for a in urls:
                 link = a.get_attribute('href')
-                if("https://chan.sankakucomplex.com/post/show/" in link and not exists(dir, link)):
-                    linkQ.put(link)
+                if("https://chan.sankakucomplex.com/post/show/" in link):
+                    if not exists(dir, strip_sankaku_postid(link)):
+                        linkQ.put(link)
+                    dir.close()
+                    dir = os.scandir(folder)        # Make new iterator and set at beginning
+            dir.close()
             print(linkQ.qsize(), " urls to be processed", flush=True)
             # Process each url and save their image if is valid
             while(linkQ.empty() == False):
+                keypress_pause(driver)
                 url = str(linkQ.get())
                 print("Opening: ", url, flush=True)
                 driver.execute_script(
@@ -304,25 +315,23 @@ def selenium_visit(driver: Firefox) -> Firefox:
 
 
 def main():
-
+    start_time = time.monotonic()
     print("ImagesDownloader 0.3, by Jeff Chen 4/15/2022", flush=True)
     print("Warning: Please only operate in the console you have chosen to use. If you need to look up a tab, please use only the first tab or separate browser", flush=True)
     print("Current restrictions", flush=True)
-    print("1) Only images or gifs work, flash game downloads or any videos will not work", flush=True)
-    print("2) Requires TamperMonkey add-on and Handy Image script", flush=True)
-    print("3) Cannot pause execution, can only end program by closing out of terminal or ctrl-c in some circumstances (ctrl-z may be able to pause effectively but untested)", flush=True)
-    print("4) Only tested on Windows 10, other OS not tested", flush=True)
-    print("5) You are free to use your cursor during execution, program does not rely on keyboard or mouse; however, do not touch Selenium browser after you've inputted a valid url\n", flush=True)
-    print("6) Images are downloaded in order first to last, use 'order:id' tag to get downloads in correct order", flush=True)
-    print("7) Note that there is a 100 page limit for free users (2000 imgs), check page depth workaround here -> https://forum.sankakucomplex.com/t/important-dont-purchase-sankaku-plus-yet-heres-why-addressing-sankaku-issues-29-days-and-not-fixed/18209/61", flush=True)
+    print("1) Requires TamperMonkey add-on and Handy Image script", flush=True)
+    print("2) Cannot pause execution, can only end program by closing out of terminal or ctrl-c in some circumstances (ctrl-z may be able to pause effectively but untested)", flush=True)
+    print("3) You are free to use your cursor during execution, program does not rely on keyboard or mouse; however, do not touch Selenium browser after you've inputted a valid url\n", flush=True)
+    print("4) Images are downloaded in order first to last, use 'order:id' tag to get downloads in correct order", flush=True)
+    print("5) Note that there is a 100 page limit for free users (2000 imgs), check page depth workaround here -> https://forum.sankakucomplex.com/t/important-dont-purchase-sankaku-plus-yet-heres-why-addressing-sankaku-issues-29-days-and-not-fixed/18209/61", flush=True)
 
     driver = selenium_init()
     driver = selenium_visit(driver)
-    time.sleep(0.5)
-    print(imgNo - 1, " images saved to ", folder)
+    print(imgNo - 1, " total files in ", folder)
     print("Exiting Selenium...")
     driver.quit()
-
+    end_time = time.monotonic()
+    print("Ran for ", timedelta(seconds=end_time - start_time))
 
 if __name__ == "__main__":
     main()
