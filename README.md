@@ -60,6 +60,12 @@ As of now, ImageOpener is not functional
 Features to add ImageOpener(TBA):
 - Bypass for 2000 file limit
 - Optional logging to file 
+- Multithreading support
+- Much more efficient duplicate item pruning
+- Network disconnect retry
+- Link save state
+- Verify save folder path and selection while program is executing
+- Set program to always minimize with switches
 
 Features to add in general:
 - Guide to download and setup downloader
