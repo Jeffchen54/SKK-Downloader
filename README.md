@@ -12,7 +12,7 @@ Functionality:
 - Pause execution between downloads by pressing and holding "alt"
 
 Requirements:
-- Selinium-python for Firefox: https://selenium-python.readthedocs.io/installation.html
+- Selenium-python for Firefox: https://selenium-python.readthedocs.io/installation.html
 - urllib3: https://pypi.org/project/urllib3/
 - Python (ran on 3.10): https://www.microsoft.com/en-us/p/python-310/9pjpw5ldxlz5?activetab=pivot:overviewtab
 - Firefox: https://www.mozilla.org/en-US/firefox/new/
