@@ -9,7 +9,8 @@ Compatible with Firefox only with dark mode settings
 @author Jeff Chen
 @created 4/5/2022
 @modified 4/17/2022
-@version 0.6
+@version 0.7
+- Added network loss retry where program will continuous attempt to proceed when network is cut off
 """
 import time
 from datetime import timedelta
@@ -19,6 +20,7 @@ from selenium.webdriver import Firefox
 from selenium.webdriver.firefox.options import Options
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
+from selenium.common.exceptions import WebDriverException
 import urllib.request
 from selenium.common.exceptions import TimeoutException
 from queue import Queue
@@ -27,15 +29,15 @@ import keyboard
 
 ########################## REQUIRED VARIABLES ########################################
 PROFILE_PATH = r'C:/Users/chenj/AppData/Roaming/Mozilla/Firefox/Profiles/8gtgo2sw.default-release'      # Absolute path to Firefox profile
-folder = r'C:/Users/chenj/Downloads/fun/img/photos/sample/'                                             # folder to save content to
+folder = r'C:/Users/chenj/Downloads/fun/img/photos/final_test/'                                             # folder to save content to
 ########################## SETTING VARIABLES ########################################
 MAXNUMTIMEOUT = 5           # Maximum number of times a window can timeout before using failsafe measures
-SCROLL_PAUSE_TIME = 2       # Time between scrolls for infscroll
-SCROLLSPERCYCLE = 5         # Number of scrolls per cycle for infscroll
+SCROLL_PAUSE_TIME = 2       # Time between scrolls for infscroll in seconds
+SCROLLSPERCYCLE = 7         # Number of scrolls per cycle for infscroll (connection test done after each cycle, more cycles means more accuracy but less performance)
 PAUSEKEY = "alt"            # Key to pause program between downloads
+NETWORK_LOSS_TIME = 30      # Amount of time to wait for a network disconnect to be resolved before trying again
 #######################################################################################################
-# Starting count of images (affected by number of files in folder)
-imgNo = 1
+imgNo = 1   # Counter for total number of images downloaded/saved
 
 
 def selenium_reinit(driver: Firefox, url: str) -> Firefox:
@@ -55,9 +57,18 @@ def selenium_reinit(driver: Firefox, url: str) -> Firefox:
     driver.quit()                   # Exit old driver
     driver = selenium_init()        # Create another driver
     # Open url in another tab
-    driver.execute_script('window.open("{}","_blank");'.format(url))
-    # Switch to the tab with content
-    driver.switch_to.window(driver.window_handles[1])
+    opened = False
+    while opened == False:
+        try:
+            driver.execute_script('window.open("{}","_blank");'.format(url))
+            # Switch to the tab with content
+            driver.switch_to.window(driver.window_handles[1])
+            opened = True
+        except WebDriverException:
+            print("Connection loss detected, sleeping for 30 seconds", flush=True)
+            driver.close()
+            driver.switch_to.window(driver.window_handles[0])
+            time.sleep(30)
     return driver
 
 def keypress_pause(driver:Firefox)->None:
@@ -68,6 +79,7 @@ def keypress_pause(driver:Firefox)->None:
         a = input("Enter 'y' to continue or 'n' to end> ")
         while(a != 'y'):
             if(a == 'n'):
+                print("Terminating program")
                 driver.quit()
                 exit()
 
@@ -176,6 +188,8 @@ def selenium_save_image(driver: Firefox, url: str) -> Firefox:
             timeout += 1
             print("Timeout has occured - Timeout counter: " + timeout)
             selenium_resolve_slowdown(driver, url)
+        except WebDriverException:
+            selenium_resolve_slowdown(driver, url)
     return driver
 
 def strip_sankaku_postid(url:str):
@@ -200,7 +214,39 @@ def selenium_resolve_slowdown(driver: Firefox, url: str) -> None:
         time.sleep(15)
     except TimeoutException as ex:
         print("Exception has been thrown. " + str(ex))
-        selenium_resolve_slowdown(driver, url)
+        time.sleep(5)
+    except WebDriverException:
+        print("Connection loss detected, sleeping for 30 seconds", flush=True)
+        time.sleep(30)
+
+
+def selenium_network_test(driver: Firefox) -> bool:
+    """
+    Checks if there is wifi, if there is no wifi, halt program execution until
+    wifi is detected
+    To be used between scrolling cycles in infscroll()
+
+    Return true if network has not been disconnected, false if network has been disconnected
+    """
+    opened = False
+    connected = True
+    while(opened == False):
+        try:
+            driver.execute_script(
+                            'window.open("","_blank");')   # Try to open website in another tab
+            driver.switch_to.window(driver.window_handles[1])   # Close the opened window
+            driver.get("https://chan.sankakucomplex.com/")
+            opened = True
+            driver.close()
+            driver._switch_to.window(driver.window_handles[0])  # Return to previous window
+        except WebDriverException:
+            print("Connection loss detected, sleeping for 30 seconds", flush=True)
+            driver.switch_to.window(driver.window_handles[1])   # Close the opened window
+            driver.close()
+            driver._switch_to.window(driver.window_handles[0])  # Return to previous window
+            time.sleep(NETWORK_LOSS_TIME)
+            connected = False
+    return connected
 
 
 def selenium_infscroll(driver: Firefox) -> None:
@@ -224,12 +270,24 @@ def selenium_infscroll(driver: Firefox) -> None:
             html.send_keys(Keys.PAGE_DOWN)
             time.sleep(SCROLL_PAUSE_TIME)
 
-        # Calculate new scroll height and compare with last scroll height
-        new_height = driver.execute_script(
-            "return window.pageYOffset + window.innerHeight")
-        if new_height == last_height:
-            break
-        last_height = new_height
+        # Network check
+        if(selenium_network_test(driver) == False):
+            connected = False
+            while connected == False:
+                try:
+                    driver.get(driver.current_url)
+                    time.sleep(5)
+                    connected = True
+                    html = driver.find_element_by_tag_name('html')
+                except WebDriverException:
+                    selenium_network_test(driver)
+        else:
+            # Calculate new scroll height and compare with last scroll height
+            new_height = driver.execute_script(
+                "return window.pageYOffset + window.innerHeight")
+            if new_height == last_height:
+                break
+            last_height = new_height
 
     time.sleep(SCROLL_PAUSE_TIME)
     print("Scrolling completed", flush=True)
@@ -276,7 +334,14 @@ def selenium_visit(driver: Firefox) -> Firefox:
             print(
                 "You did not enter a valid link, links contain https://chan.sankakucomplex.com")
         else:
-            driver.get(url)
+            visited = False
+            while(visited == False):
+                try:
+                    driver.get(url)
+                    visited = True
+                except WebDriverException:
+                    print("Connection loss detected, sleeping for 30 seconds", flush=True)
+                    time.sleep(30)
             selenium_infscroll(driver)
             time.sleep(1)
 
@@ -299,31 +364,34 @@ def selenium_visit(driver: Firefox) -> Firefox:
             print(linkQ.qsize(), " urls to be processed", flush=True)
             # Process each url and save their image if is valid
             while(linkQ.empty() == False):
-                keypress_pause(driver)
-                url = str(linkQ.get())
-                print("Opening: ", url, flush=True)
-                driver.execute_script(
-                    'window.open("{}","_blank");'.format(url))
-                time.sleep(3)
-                driver.switch_to.window(driver.window_handles[1])
-                driver = selenium_save_image(driver, url)
-                driver.close()
-                driver.switch_to.window(driver.window_handles[0])
-                time.sleep(0.5)
+                try:
+                    url = str(linkQ.get())
+                    print("Opening: ", url, flush=True)
+                    driver.execute_script(
+                        'window.open("{}","_blank");'.format(url))
+                    time.sleep(3)
+                    driver.switch_to.window(driver.window_handles[1])
+                    driver = selenium_save_image(driver, url)
+                    driver.close()
+                    driver.switch_to.window(driver.window_handles[0])
+                    time.sleep(0.5)
+                except WebDriverException:
+                        print("Connection loss detected, sleeping for 30 seconds", flush=True)
+                        driver.close()
+                        driver.switch_to.window(driver.window_handles[0])
+                        linkQ.put(url)
+                        time.sleep(30)
             cont = False
     return driver
 
 
 def main():
     start_time = time.monotonic()
-    print("ImagesDownloader 0.3, by Jeff Chen 4/15/2022", flush=True)
+    print("ImagesDownloader 0.7, by Jeff Chen 4/17/2022", flush=True)
     print("Warning: Please only operate in the console you have chosen to use. If you need to look up a tab, please use only the first tab or separate browser", flush=True)
     print("Current restrictions", flush=True)
-    print("1) Requires TamperMonkey add-on and Handy Image script", flush=True)
-    print("2) Cannot pause execution, can only end program by closing out of terminal or ctrl-c in some circumstances (ctrl-z may be able to pause effectively but untested)", flush=True)
-    print("3) You are free to use your cursor during execution, program does not rely on keyboard or mouse; however, do not touch Selenium browser after you've inputted a valid url\n", flush=True)
-    print("4) Images are downloaded in order first to last, use 'order:id' tag to get downloads in correct order", flush=True)
-    print("5) Note that there is a 100 page limit for free users (2000 imgs), check page depth workaround here -> https://forum.sankakucomplex.com/t/important-dont-purchase-sankaku-plus-yet-heres-why-addressing-sankaku-issues-29-days-and-not-fixed/18209/61", flush=True)
+    print("1) You are free to use your cursor during execution, program does not rely on keyboard or mouse; however, do not touch Selenium browser after you've inputted a valid url\n", flush=True)
+    print("2) Note that there is a 100 page limit for free users (2000 imgs), check page depth workaround here -> https://forum.sankakucomplex.com/t/important-dont-purchase-sankaku-plus-yet-heres-why-addressing-sankaku-issues-29-days-and-not-fixed/18209/61", flush=True)
 
     driver = selenium_init()
     driver = selenium_visit(driver)
