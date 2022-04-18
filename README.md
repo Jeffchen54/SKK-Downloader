@@ -61,7 +61,7 @@ Features to add ImageOpener(TBA):
 - Bypass for 2000 file limit
 - Optional logging to file 
 - Multithreading support
-- Much more efficient duplicate item pruning
+- Much more efficient duplicate item pruning (currently is linear search but closed hash table using prefix of file extension (postid) will be a huge improvement)
 - Network disconnect retry
 - Link save state
 - Verify save folder path and selection while program is executing
