@@ -4,8 +4,15 @@
 Description:
 Project used to play around with python and download from Sankaku while bypassing numerous methods employed by Sankaku. Method is slower than other mass downloaders and only compatible with https://chan.sankakucomplex.com/
 
+Functionality:
+- Downloads all images, videos, and flash games from a given page while bypassing download prevention methods. Downloads up to 2000 files (100 page limit)
+- Sets post id as downloaded file filenames
+- Ignores previous downloaded photos (if they were downloaded using this program)
+- Custom directory
+- Pause execution between downloads by pressing and holding "alt"
+
 Requirements:
-- Selinium-python for Firefox: https://selenium-python.readthedocs.io/installation.html
+- Selenium-python for Firefox: https://selenium-python.readthedocs.io/installation.html
 - urllib3: https://pypi.org/project/urllib3/
 - Python (ran on 3.10): https://www.microsoft.com/en-us/p/python-310/9pjpw5ldxlz5?activetab=pivot:overviewtab
 - Firefox: https://www.mozilla.org/en-US/firefox/new/
@@ -51,11 +58,14 @@ ImageOpener(0.2) 4/15/2022:
 As of now, ImageOpener is not functional
 
 Features to add ImageOpener(TBA):
-- Improved manual termination
-- Pause with save state 
 - Bypass for 2000 file limit
 - Optional logging to file 
-- Helpful global variables to toggle
+- Multithreading support
+- Much more efficient duplicate item pruning (currently is linear search but closed hash table using prefix of file extension (postid) will be a huge improvement)
+- Network disconnect retry
+- Link save state
+- Verify save folder path and selection while program is executing
+- Set program to always minimize with switches
 
 Features to add in general:
 - Guide to download and setup downloader
