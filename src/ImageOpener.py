@@ -11,6 +11,13 @@ Compatible with Firefox only with dark mode settings
 @modified 4/17/2022
 @version 0.7
 - Added network loss retry where program will continuous attempt to proceed when network is cut off
+- Setting to increase initial link load time
+- Add minimize option
+- Added scrolling confirmation option
+- Added several other download types
+- Fixed bug where timeout counter concat threw an exception
+- Fixed bug where timeout counter was not being incremented
+
 """
 import time
 from datetime import timedelta
@@ -28,16 +35,37 @@ import keyboard
 
 
 ########################## REQUIRED VARIABLES ########################################
-PROFILE_PATH = r'C:/Users/chenj/AppData/Roaming/Mozilla/Firefox/Profiles/8gtgo2sw.default-release'      # Absolute path to Firefox profile
-folder = r'C:/Users/chenj/Downloads/fun/img/photos/final_test/'                                             # folder to save content to
+# Absolute path to Firefox profile
+PROFILE_PATH = r'C:/Users/chenj/AppData/Roaming/Mozilla/Firefox/Profiles/8gtgo2sw.default-release'
+# Absolute path to temp folder, stores profiles used by threads
+TEMP_PATH = r'C:/Users/chenj\Downloads/fun/src/temp'
+# folder to save content to
+folder = r'C:/Users/chenj/Downloads/fun/img/'
 ########################## SETTING VARIABLES ########################################
-MAXNUMTIMEOUT = 5           # Maximum number of times a window can timeout before using failsafe measures
+# Maximum number of times a window can timeout before using failsafe measures
+MAXNUMTIMEOUT = 5
 SCROLL_PAUSE_TIME = 2       # Time between scrolls for infscroll in seconds
-SCROLLSPERCYCLE = 7         # Number of scrolls per cycle for infscroll (connection test done after each cycle, more cycles means more accuracy but less performance)
+# Number of scrolls per cycle for infscroll (connection test done after each cycle, more cycles means more accuracy but less performance)
+SCROLLSPERCYCLE = 7
 PAUSEKEY = "alt"            # Key to pause program between downloads
-NETWORK_LOSS_TIME = 30      # Amount of time to wait for a network disconnect to be resolved before trying again
+# Amount of time to wait for a network disconnect to be resolved before trying again
+NETWORK_LOSS_TIME = 30
+LINK_LOAD_TIME = 10         # Amount of time to wait after a link is opened
+# To minimize browser automatically or not, browser may flash upon initializing
+MINIMIZE = False
+SCROLL_CONFIRMATION = True  # Require user confirmation when scrolling is complete
 #######################################################################################################
 imgNo = 1   # Counter for total number of images downloaded/saved
+
+
+class Error(Exception):
+    """Base class for other exceptions"""
+    pass
+
+
+class UnknownFileTypeException(Error):
+    """Raised when file type cannot be determined"""
+    pass
 
 
 def selenium_reinit(driver: Firefox, url: str) -> Firefox:
@@ -48,14 +76,15 @@ def selenium_reinit(driver: Firefox, url: str) -> Firefox:
     In visual studios, code is shown as unreachable, however,
     this is wrong and the code actually runs
 
-    Param: 
+    Param:
         driver: driver to reinitialize
         url: current url driver is on
     Pre: driver has not quit()
-    Return: reinitialized driver 
+    Return: reinitialized driver
     """
     driver.quit()                   # Exit old driver
     driver = selenium_init()        # Create another driver
+    time.sleep(5)                   # Wait before opening a tab
     # Open url in another tab
     opened = False
     while opened == False:
@@ -71,7 +100,8 @@ def selenium_reinit(driver: Firefox, url: str) -> Firefox:
             time.sleep(30)
     return driver
 
-def keypress_pause(driver:Firefox)->None:
+
+def keypress_pause(driver: Firefox) -> None:
     """
     Pauses program execution when a key is currently being pressed, entering a key to proceed
     """
@@ -84,12 +114,93 @@ def keypress_pause(driver:Firefox)->None:
                 exit()
 
 
+def guess_ext_type(fname: str) -> str:
+    """
+    Given a file name, determine file type
+
+    Params:
+        fname: file name
+    Return: file extension (".png", ".webm",...), None if cannot be determined
+    """
+    if(".gif" in fname):
+        return ".gif"
+    elif(".jpg" in fname):
+        return ".jpg"
+    elif(".png" in fname):
+        return ".png"
+    elif("jpeg" in fname):
+        return ".jpeg"
+    elif(".mp4" in fname):
+        return ".mp4"
+    elif(".swf" in fname):
+        return ".swf"
+    elif(".webp" in fname):
+        return ".webp"
+    elif(".webm" in fname):
+        return".webm"
+    elif(".mov" in fname):
+        return ".mov"
+    return None
+
+
+def selenium_save_with_url(driver: Firefox, url: str, xpath: str, downloadExt: str) -> bool:
+    """
+    Attempts to save a file at a specified url's xpath using driver. File is saved with the extension
+    specified by downloadExt. If a url returns an error image, driver current handle is refreshed
+    and nothing is downloaded
+
+    Params:
+        driver: Active selenium firefox window
+        url: url to download file from
+        xpath: HTML xpath where file to download is located
+        downloadExt: downloaded file's extension (.mp4,.swf,...). None to guess file type
+    Pre: Current page is url
+    Post: content on current selinium page downloaded to folder. Content downloaded uses postid as file name
+            imgno incremented upon success.
+    Return: True if download succeeded and false otherwise
+    Raise: UnknownFileTypeException when file type cannot be determined
+    """
+    global imgNo
+    l = driver.find_element(By.XPATH, xpath)
+    src = l.get_attribute('src')
+
+    # Check if error image is loaded
+    if("https://s.sankakucomplex.com/images/channel-dark-logo.png" in src):
+        print("src loaded unproperly, refreshing window", flush=True)
+        driver.refresh()
+        time.sleep(5)
+        return False
+
+    # Set headers and grab file at the source
+    req = urllib.request.Request(src,
+                                 headers={
+                                     'User-agent':
+                                     'Mozilla/5.0 (Windows NT 5.1; rv:43.0) Gecko/20100101 Firefox/43.0'})
+    resp = urllib.request.urlopen(req)
+
+    # determine source file type if unspecified
+    if(downloadExt == None):
+        downloadExt = guess_ext_type(src)
+
+        if downloadExt == None:
+            raise UnknownFileTypeException(
+                "Cannot determine file extension type")
+
+    # Download file into local storage
+    with open(folder + sankaku_postid_strip(url) + downloadExt, "wb") as fd:
+        print("Saving: ", src, flush=True)
+        fd.write(resp.read())
+        imgNo += 1
+    fd.close()
+    return True
+
+
 def selenium_save_image(driver: Firefox, url: str) -> Firefox:
     """
     Saves an content on the current tab using the following system:
-    1) Check if a video (.mp4) exists on window, if not then
-    2) Check if a embed (.swf) exists on window, if not then
-    3) Check if a image (.png,.jpg,.jpeg,.gif) exists on window, if not then
+    1) Check if a video exists on window, if not then
+    2) Check if a embed exists on window, if not then
+    3) Check if a image exists on window, if not then
     4) Refresh window and start over
 
     If a piece of content exists, it will be saved to folder and driver used to download
@@ -108,7 +219,6 @@ def selenium_save_image(driver: Firefox, url: str) -> Firefox:
     Pre: folder must exists. Content to download on current tab of driver.
     Post: content on current selinium page downloaded to folder
     """
-    global imgNo
     oldImgNo = imgNo
     timeout = 0
     # If image exists
@@ -120,84 +230,28 @@ def selenium_save_image(driver: Firefox, url: str) -> Firefox:
         try:
             # mp4
             try:
-                l = driver.find_element(By.XPATH, '//video')
-                src = l.get_attribute('src')
-                req = urllib.request.Request(src,
-                                             headers={
-                                                 'User-agent':
-                                                 'Mozilla/5.0 (Windows NT 5.1; rv:43.0) Gecko/20100101 Firefox/43.0'})
-                resp = urllib.request.urlopen(req)
-                with open(folder + strip_sankaku_postid(url) + ".mp4", "wb") as fd:
-                    print("Saving: ", src, flush=True)
-                    fd.write(resp.read())
-                    imgNo += 1
+                selenium_save_with_url(driver, url, '//video', None)
             except:
                 # flash
                 try:
-                    l = driver.find_element(By.XPATH, '//embed')
-                    src = l.get_attribute('src')
-                    req = urllib.request.Request(src,
-                                                 headers={
-                                                     'User-agent':
-                                                     'Mozilla/5.0 (Windows NT 5.1; rv:43.0) Gecko/20100101 Firefox/43.0'})
-                    resp = urllib.request.urlopen(req)
-                    with open(folder + strip_sankaku_postid(url) + ".swf", "wb") as fd:
-                        print("Saving: ", src, flush=True)
-                        fd.write(resp.read())
-                        imgNo += 1
+                    selenium_save_with_url(driver, url, '//embed', None)
                 except:
                     # Static image + gifs
-                    try:
-                        # Get path of image
-                        l = driver.find_element(by=By.XPATH, value='//img[1]')
-                        src = l.get_attribute('src')
-
-                        if("https://s.sankakucomplex.com/images/channel-dark-logo.png" in src):
-                            print(
-                                "src loaded unproperly, refreshing window", flush=True)
-                            driver.refresh()
-                            time.sleep(5)
-                        else:
-                            # Disguised requests to trick Sankaku
-                            req = urllib.request.Request(src,
-                                                         headers={
-                                                             'User-agent':
-                                                             'Mozilla/5.0 (Windows NT 5.1; rv:43.0) Gecko/20100101 Firefox/43.0'})
-                            resp = urllib.request.urlopen(req)
-
-                            # Determine type of file
-                            type = ".png"
-                            if(".gif" in src):
-                                type = ".gif"
-                            elif(".jpg" in src):
-                                type = ".jpg"
-                            elif("jpeg" in src):
-                                type = ".jpeg"
-
-                            # Download image
-                            with open(folder + strip_sankaku_postid(url) + type, "wb") as fd:
-                                print("Saving: ", src, flush=True)
-                                fd.write(resp.read())
-                                imgNo += 1
-
-                    # If image does not exists
-                    except:
-                        selenium_resolve_slowdown(driver, url)
-                        timeout += 1
-        except TimeoutException:
+                    selenium_save_with_url(driver, url, '//img[1]', None)
+        except (TimeoutException, WebDriverException):
             timeout += 1
-            print("Timeout has occured - Timeout counter: " + timeout)
-            selenium_resolve_slowdown(driver, url)
-        except WebDriverException:
+            print("Timeout has occured - Timeout counter: " + str(timeout))
             selenium_resolve_slowdown(driver, url)
     return driver
 
-def strip_sankaku_postid(url:str):
+
+def sankaku_postid_strip(url: str) -> str:
     """
     Strips a sankaku url and returns the post id referred to by the url
     """
     tokens = url.split("/")
     return tokens[len(tokens)-1]
+
 
 def selenium_resolve_slowdown(driver: Firefox, url: str) -> None:
     """
@@ -233,17 +287,21 @@ def selenium_network_test(driver: Firefox) -> bool:
     while(opened == False):
         try:
             driver.execute_script(
-                            'window.open("","_blank");')   # Try to open website in another tab
-            driver.switch_to.window(driver.window_handles[1])   # Close the opened window
+                'window.open("","_blank");')   # Try to open website in another tab
+            # Close the opened window
+            driver.switch_to.window(driver.window_handles[1])
             driver.get("https://chan.sankakucomplex.com/")
             opened = True
             driver.close()
-            driver._switch_to.window(driver.window_handles[0])  # Return to previous window
+            # Return to previous window
+            driver._switch_to.window(driver.window_handles[0])
         except WebDriverException:
             print("Connection loss detected, sleeping for 30 seconds", flush=True)
-            driver.switch_to.window(driver.window_handles[1])   # Close the opened window
+            # Close the opened window
+            driver.switch_to.window(driver.window_handles[1])
             driver.close()
-            driver._switch_to.window(driver.window_handles[0])  # Return to previous window
+            # Return to previous window
+            driver._switch_to.window(driver.window_handles[0])
             time.sleep(NETWORK_LOSS_TIME)
             connected = False
     return connected
@@ -258,14 +316,13 @@ def selenium_infscroll(driver: Firefox) -> None:
     """
     print("Scrolling...", flush=True)
     html = driver.find_element_by_tag_name('html')
-
     # Get scroll height
     last_height = driver.execute_script(
         "return window.pageYOffset + window.innerHeight")
 
     while True:
         # Scroll down to bottom, multiple scrolls done just in case
-        for i in range(0,SCROLLSPERCYCLE):
+        for i in range(0, SCROLLSPERCYCLE):
             html.send_keys(Keys.PAGE_DOWN)
             html.send_keys(Keys.PAGE_DOWN)
             time.sleep(SCROLL_PAUSE_TIME)
@@ -286,7 +343,13 @@ def selenium_infscroll(driver: Firefox) -> None:
             new_height = driver.execute_script(
                 "return window.pageYOffset + window.innerHeight")
             if new_height == last_height:
-                break
+                if SCROLL_CONFIRMATION:
+                    if(input('Type y if scrolling is complete, n to continue scrolling: ').lower() == 'y'):
+                        break
+                    else:
+                        print("Scrolling...", flush=True)
+                else:
+                    break
             last_height = new_height
 
     time.sleep(SCROLL_PAUSE_TIME)
@@ -304,6 +367,8 @@ def selenium_init() -> Firefox:
     driver = webdriver.Firefox(options=opt)
     driver.set_script_timeout(15)
     driver.set_page_load_timeout(15)
+    if(MINIMIZE):
+        driver.minimize_window()
     return driver
 
 
@@ -315,6 +380,37 @@ def exists(dir, substr: str) -> bool:
         if(entry.is_file() and substr in entry.name):
             return True
     return False
+
+
+def sankaku_url_strip(url: str) -> str:
+    """
+    Strips 2 kinds of urls into their base form:
+    1) https://chan.sankakucomplex.com/?tags=tag%tag%tag%tag&page=1
+    Contains page number and tag(s). Formatting of tags does not matter
+
+    2) https://chan.sankakucomplex.com/?tags=tag+tag+tag+tag+-tag&commit=Search
+    Contains tag mentioned page was from a search and tag(s). Formatting of tags does not matter
+
+    Base form: https://chan.sankakucomplex.com/?tags=tag+tag+tag+tag+-tag
+    Contains only tags
+
+    Param:
+        str: sankaku url in 1 of the 2 forms or in base form
+    Return: url in base form
+    """
+    tokens = url.split("&")
+    return tokens[0]
+
+def sankaku_url_set_next(url: str, postid: str) -> str:
+    """
+    Inserts next=<postid>& after the first ? in url and returns it.
+
+    Param:
+        str: sankaku url in base form (look at sankaku_url_strip)
+    Return: str with next added to it
+    """
+    tokens = url.split("?")
+    return tokens[0] + "?next=" + postid + "&" + tokens[1]
 
 
 def selenium_visit(driver: Firefox) -> Firefox:
@@ -340,7 +436,8 @@ def selenium_visit(driver: Firefox) -> Firefox:
                     driver.get(url)
                     visited = True
                 except WebDriverException:
-                    print("Connection loss detected, sleeping for 30 seconds", flush=True)
+                    print(
+                        "Connection loss detected, sleeping for 30 seconds", flush=True)
                     time.sleep(30)
             selenium_infscroll(driver)
             time.sleep(1)
@@ -350,16 +447,19 @@ def selenium_visit(driver: Firefox) -> Firefox:
             imgNo = numParsed + 1
             print("Processing urls and removing duplicate files...", flush=True)
             # Make a deep copy of all urls.
+            # Gets all urls on current page
             urls = driver.find_elements(by=By.XPATH, value='.//a')
+            # Holds urls to downloaded and processed
             linkQ = Queue(-1)
             dir = os.scandir(folder)        # Everything in folder
             for a in urls:
                 link = a.get_attribute('href')
                 if("https://chan.sankakucomplex.com/post/show/" in link):
-                    if not exists(dir, strip_sankaku_postid(link)):
+                    if not exists(dir, sankaku_postid_strip(link)):
                         linkQ.put(link)
                     dir.close()
-                    dir = os.scandir(folder)        # Make new iterator and set at beginning
+                    # Make new iterator and set at beginning
+                    dir = os.scandir(folder)
             dir.close()
             print(linkQ.qsize(), " urls to be processed", flush=True)
             # Process each url and save their image if is valid
@@ -369,18 +469,19 @@ def selenium_visit(driver: Firefox) -> Firefox:
                     print("Opening: ", url, flush=True)
                     driver.execute_script(
                         'window.open("{}","_blank");'.format(url))
-                    time.sleep(3)
                     driver.switch_to.window(driver.window_handles[1])
+                    time.sleep(LINK_LOAD_TIME)
                     driver = selenium_save_image(driver, url)
                     driver.close()
                     driver.switch_to.window(driver.window_handles[0])
                     time.sleep(0.5)
                 except WebDriverException:
-                        print("Connection loss detected, sleeping for 30 seconds", flush=True)
-                        driver.close()
-                        driver.switch_to.window(driver.window_handles[0])
-                        linkQ.put(url)
-                        time.sleep(30)
+                    print(
+                        "Connection loss detected, sleeping for 30 seconds", flush=True)
+                    driver.close()
+                    driver.switch_to.window(driver.window_handles[0])
+                    linkQ.put(url)
+                    time.sleep(30)
             cont = False
     return driver
 
@@ -392,7 +493,7 @@ def main():
     print("Current restrictions", flush=True)
     print("1) You are free to use your cursor during execution, program does not rely on keyboard or mouse; however, do not touch Selenium browser after you've inputted a valid url\n", flush=True)
     print("2) Note that there is a 100 page limit for free users (2000 imgs), check page depth workaround here -> https://forum.sankakucomplex.com/t/important-dont-purchase-sankaku-plus-yet-heres-why-addressing-sankaku-issues-29-days-and-not-fixed/18209/61", flush=True)
-
+    print("3) If infinite scroll is not turned on, please enable it or not all files will be downloaded", flush=True)
     driver = selenium_init()
     driver = selenium_visit(driver)
     print(imgNo - 1, " total files in ", folder)
@@ -400,6 +501,7 @@ def main():
     driver.quit()
     end_time = time.monotonic()
     print("Ran for ", timedelta(seconds=end_time - start_time))
+
 
 if __name__ == "__main__":
     main()
