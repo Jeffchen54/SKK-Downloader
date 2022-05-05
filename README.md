@@ -1,5 +1,5 @@
 # SKK-Downloader
-**Not meant for external use but free for any to download and play with, functionality is not guaranteed until version 1.0**
+**Not meant for external use but free for any to download and play with, functionality is not guaranteed until version 1.0. Is on hiatus until mid may 2022**
 
 Description:
 Project used to play around with python and download from Sankaku while bypassing numerous methods employed by Sankaku. Method is slower than other mass downloaders and only compatible with https://chan.sankakucomplex.com/
@@ -61,11 +61,11 @@ Features to add ImageOpener(TBA):
 - Bypass for 2000 file limit
 - Optional logging to file 
 - Multithreading support
-- Much more efficient duplicate item pruning (currently is linear search but closed hash table using prefix of file extension (postid) will be a huge improvement)
-- Network disconnect retry
+- Much more efficient duplicate item pruning (currently is linear search but closed hash table or some tree/radix sort hybrid using prefix of file extension (postid) will be a huge improvement)
 - Link save state
 - Verify save folder path and selection while program is executing
 - Set program to always minimize with switches
+- Basic GUI
 
 Features to add in general:
 - Guide to download and setup downloader
