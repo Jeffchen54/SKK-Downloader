@@ -2,7 +2,7 @@
 **Not meant for external use but free for any to download and play with, functionality is not guaranteed until version 1.0. Is on hiatus until mid may 2022**
 
 Description:
-Project used to play around with python and download from Sankaku while bypassing numerous methods employed by Sankaku. Method is slower than other mass downloaders and only compatible with https://chan.sankakucomplex.com/
+Project used to play around with python and download from Sankaku while bypassing numerous methods employed by Sankaku. Method is slower than other mass downloaders and only compatible with https://chan.sankakucomplex.com/?tags=rating%3Asafe&commit=Search
 
 Functionality:
 - Downloads all images, videos, and flash games from a given page while bypassing download prevention methods. Downloads up to 2000 files (100 page limit)
