@@ -10,7 +10,6 @@ class MismatchTypeException(Error):
     """Raised when a comparison is made on 2 different types"""
     pass
 
-
 class KVPair (Generic[T]):
     """
     Generic KVPair structure where:
@@ -41,9 +40,9 @@ class KVPair (Generic[T]):
 
     def compareTo(self, other)->int:
         """
-        Compares self and other key value
+        Compares self and other key value. Ignores generic typing
 
-        Raise: MismatchTypeException if other is not the same type as self
+        Raise: MismatchTypeException if other is not a KVPair
         Return:
             self.getKey() > other.getKey() -> 1
             self.getKey() == other.getKey() -> 0
@@ -59,17 +58,59 @@ class KVPair (Generic[T]):
             return 0
         return -1
 
-
 class HashTable:
     """
-    Closed, extensible hash table database storing KVPairs 
+    Closed, extensible hash table database storing KVPairs of any type
 
     @author Jeff Chen
     @created 5/8/2022
     @Last modified 5/8/2022
     """
-    """ __capacity: int
-    records:
+    __size:int
+    __records:List[KVPair]
+    __occupied:int
 
     def __init__(self, size):
-    """
+        """
+        Construct a hash table with initial size
+
+        Param:
+            initialSize: Initial hash table size
+        """
+        self.__size = size
+        self.__records = list()
+
+    def getSize(self):
+        """
+        Get size of hash table
+        """
+        return int(self.__size)
+
+    def hash(self, s:str, m:int)->int:
+        """
+        Hashing algorithm using string folding. Adopted from
+        OpenDSA and translated to python 
+
+        Params
+            s: string to hash
+            m: size of table 
+        Return: home slot of s
+        """
+        intLength:int = int(len(s) / 4)
+        sum:int = 0
+
+        for j in range(0, intLength):
+            c = list(s[j * 4: (j * 4) + 4])
+            mult = 1
+            for k in range(0, len(c)):
+                sum += ord(c[k]) * mult
+                mult *= 256
+        index = intLength * 4
+        c = list(s[index:])
+        mult = 1
+
+        for k in range(0, len(c)):
+            sum += ord(c[k]) * mult
+            mult *= 256
+
+        return abs(sum % m)
