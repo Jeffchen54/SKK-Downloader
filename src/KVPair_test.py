@@ -22,6 +22,9 @@ class KVTestCase(unittest.TestCase):
         self.assertEqual("Happee", pair.getValue())
 
     def test_compareTo(self):
+        """
+        Tests compareTo()
+        """
         pair =KVPair[str](5, "Happee") 
         pair2 = KVPair[int](5, 5)
         pairLow = KVPair[str](0, "low")
@@ -40,6 +43,31 @@ class KVTestCase(unittest.TestCase):
         # Exception testing
         self.assertRaises(MismatchTypeException, pair.compareTo, null)
         self.assertRaises(MismatchTypeException, pair.compareTo, non)
+
+    def test_toString(self):
+        """
+        tests str(KVPair)
+        """
+        pair =KVPair[str](5, "Happee") 
+        pair2 = KVPair[int](5, 5)
+        self.assertEqual("{key:5, value:Happee, Tomb:F}", str(pair))
+        self.assertEqual("{key:5, value:5, Tomb:F}", str(pair2))
+        pair.setTombstone()
+        self.assertEqual("{key:5, value:Happee, Tomb:T}", str(pair))
+        pair.disableTombstone()
+        self.assertEqual("{key:5, value:Happee, Tomb:F}", str(pair))
+        
+    def test_tombstone(self):
+        """
+        Tests all related tombstone functions
+        -> init(), isTombstone(), setTombstone(), disableTombstone()
+        """
+        pair =KVPair[str](5, "Happee") 
+        self.assertFalse(pair.isTombstone())
+        pair.setTombstone()
+        self.assertTrue(pair.isTombstone())
+        pair.disableTombstone()
+        self.assertFalse(pair.isTombstone())
 
 
 if __name__ == '__main__':
