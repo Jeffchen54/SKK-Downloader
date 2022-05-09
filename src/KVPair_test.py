@@ -11,25 +11,25 @@ class KVTestCase(unittest.TestCase):
         """
         Tests getKey()
         """
-        pair = KVPair[str](5, "Happee")
+        pair = KVPair[int,str](5, "Happee")
         self.assertEqual(5, pair.getKey())
     
     def test_getValue(self):
         """
         Tests getValue()
         """
-        pair = KVPair[str](5, "Happee")
+        pair = KVPair[int,str](5, "Happee")
         self.assertEqual("Happee", pair.getValue())
 
     def test_compareTo(self):
         """
         Tests compareTo()
         """
-        pair =KVPair[str](5, "Happee") 
-        pair2 = KVPair[int](5, 5)
-        pairLow = KVPair[str](0, "low")
-        pairHigh = KVPair[str](10, "high")
-        pairEqual = KVPair[str](5, "equal")
+        pair =KVPair[int, str](5, "Happee") 
+        pair2 = KVPair[int, int](5, 5)
+        pairLow = KVPair[int, str](0, "low")
+        pairHigh = KVPair[int, str](10, "high")
+        pairEqual = KVPair[int, str](5, "equal")
         null = None
         non = "str"
 
@@ -48,8 +48,8 @@ class KVTestCase(unittest.TestCase):
         """
         tests str(KVPair)
         """
-        pair =KVPair[str](5, "Happee") 
-        pair2 = KVPair[int](5, 5)
+        pair =KVPair[int, str](5, "Happee") 
+        pair2 = KVPair[int, int](5, 5)
         self.assertEqual("{key:5, value:Happee, Tomb:F}", str(pair))
         self.assertEqual("{key:5, value:5, Tomb:F}", str(pair2))
         pair.setTombstone()
@@ -62,7 +62,7 @@ class KVTestCase(unittest.TestCase):
         Tests all related tombstone functions
         -> init(), isTombstone(), setTombstone(), disableTombstone()
         """
-        pair =KVPair[str](5, "Happee") 
+        pair =KVPair[int, str](5, "Happee") 
         self.assertFalse(pair.isTombstone())
         pair.setTombstone()
         self.assertTrue(pair.isTombstone())

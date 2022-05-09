@@ -32,18 +32,18 @@ class KVTestCase(unittest.TestCase):
         Tests add()
         """
         # Add one entry
-        self.hashT.hashtable_add(KVPair[str](12345, "aaa"))
+        self.hashT.hashtable_add(KVPair[int, str](12345, "aaa"))
         self.assertEqual(100, self.hashT.hashtable_getSize())
         self.assertEqual(1, self.hashT.hashtable_getOccupied())
 
         # Add duplicate entry
-        self.hashT.hashtable_add(KVPair[str](12345, "a"))
+        self.hashT.hashtable_add(KVPair[int, str](12345, "a"))
         self.assertEqual(100, self.hashT.hashtable_getSize())
         self.assertEqual(1, self.hashT.hashtable_getOccupied())
 
         # Add 50 more entries
         for i in range(0, 50):
-            self.hashT.hashtable_add(KVPair[str](i, str(i)))
+            self.hashT.hashtable_add(KVPair[int, str](i, str(i)))
 
         self.assertEqual(200, self.hashT.hashtable_getSize())
         self.assertEqual(51, self.hashT.hashtable_getOccupied())
@@ -54,16 +54,16 @@ class KVTestCase(unittest.TestCase):
         Tests delete()
         """
         # Delete non-existant
-        self.assertFalse(self.hashT.hashtable_delete(KVPair[str](12345, "Does not exist")))
+        self.assertFalse(self.hashT.hashtable_delete(KVPair[int, str](12345, "Does not exist")))
 
         # Add and delete entry
-        self.hashT.hashtable_add(KVPair[str](12345, "Does exists"))
-        self.assertTrue(self.hashT.hashtable_delete(KVPair[str](12345, "Does exist")))
+        self.hashT.hashtable_add(KVPair[int, str](12345, "Does exists"))
+        self.assertTrue(self.hashT.hashtable_delete(KVPair[int, str](12345, "Does exist")))
         self.assertEqual(100, self.hashT.hashtable_getSize())
         self.assertEqual(0, self.hashT.hashtable_getOccupied())
 
         # Delete entry again
-        self.assertFalse(self.hashT.hashtable_delete(KVPair[str](12345, "Does exist")))
+        self.assertFalse(self.hashT.hashtable_delete(KVPair[int, str](12345, "Does exist")))
         self.assertEqual(100, self.hashT.hashtable_getSize())
         self.assertEqual(0, self.hashT.hashtable_getOccupied())
 
@@ -75,11 +75,11 @@ class KVTestCase(unittest.TestCase):
         # 8 is a known size that bricks quadratic probe
         self.hashT = HashTable(8)
 
-        self.hashT.hashtable_add(KVPair[str](97, "a"))
-        self.hashT.hashtable_add(KVPair[str](4324, "aa"))
-        self.hashT.hashtable_add(KVPair[str](43214, "aaa"))
+        self.hashT.hashtable_add(KVPair[int, str](97, "a"))
+        self.hashT.hashtable_add(KVPair[int, str](4324, "aa"))
+        self.hashT.hashtable_add(KVPair[int, str](43214, "aaa"))
         #self.hashT.hashtable_add(KVPair[str](47124367, "aaaa"))
-        self.assertEqual(-1, self.hashT.hashtable_exist(KVPair[str](47124367, "aaaa")))
+        self.assertEqual(-1, self.hashT.hashtable_exist(KVPair[int, str](47124367, "aaaa")))
         self.assertEqual(16, self.hashT.hashtable_getSize())
         self.assertEqual(3, self.hashT.hashtable_getOccupied())
         

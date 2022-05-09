@@ -2,7 +2,7 @@ from typing import List
 from typing import TypeVar, Generic
 
 T = TypeVar('T')
-
+V = TypeVar('V')
 
 class Error(Exception):
     """Base class for other exceptions"""
@@ -14,19 +14,19 @@ class MismatchTypeException(Error):
     pass
 
 
-class KVPair (Generic[T]):
+class KVPair (Generic[T,V]):
     """
     Generic KVPair structure where:
-        Key is generic
-        Value is int
+        Key is generic V
+        Value is generic T
         Tombstone is bool & optional
     Upon initiailization, data becomes read-only
     """
-    __key: int
+    __key: V
     __value: T
     __tombstone: bool
 
-    def __init__(self, key: int, value: T) -> None:
+    def __init__(self, key: V, value: T) -> None:
         """
         Initializes KVPair. Tombstone is disabled by default.
 
@@ -39,7 +39,7 @@ class KVPair (Generic[T]):
         self.__key = key
         self.__tombstone = False
 
-    def getKey(self) -> int:
+    def getKey(self) -> V:
         """
         Returns key
         Return: key
@@ -65,7 +65,7 @@ class KVPair (Generic[T]):
 
         """
         if other == None or not isinstance(other, KVPair):
-            raise MismatchTypeException("other is not of type KVPair(T)")
+            raise MismatchTypeException("other is not of type KVPair(V,T)")
 
         if self.__key > other.getKey():
             return 1

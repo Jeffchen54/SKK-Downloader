@@ -8,7 +8,7 @@ Compatible with Firefox only with dark mode settings
 
 @author Jeff Chen
 @created 4/5/2022
-@modified 5/5/2022
+@modified 5/8/2022
 @version 0.7
 - Added network loss retry where program will continuous attempt to proceed when network is cut off
 - Setting to increase initial link load time
@@ -19,8 +19,12 @@ Compatible with Firefox only with dark mode settings
 - Fixed bug where timeout counter was not being incremented
 - Improved code organization
 - Add timeout where if a file fails to be downloaded, it is skipped and save to a log
-- Fixed several download exceptions
+- Fixed several exceptions when downloading files
+- Overhauled duplicate file detector, massive performance boost for large directory file/download file count
 - TODO bypass download limit
+- TODO read from index file instead of directory option
+- TODO CMD line options
+- TODO use pages instead of infinite scrolling
 
 """
 import time
@@ -40,6 +44,8 @@ import keyboard
 from typing import List
 from selenium.webdriver.remote.webelement import WebElement
 from selenium.common.exceptions import NoSuchElementException
+from HashTable import HashTable
+from HashTable import KVPair
 import http
 
 
@@ -49,7 +55,8 @@ PROFILE_PATH = r'C:/Users/chenj/AppData/Roaming/Mozilla/Firefox/Profiles/8gtgo2s
 # Absolute path to temp folder, stores profiles used by threads
 TEMP_PATH = r'C:/Users/chenj\Downloads/fun/src/temp'
 # folder to save content to
-folder = r'C:/Users/chenj/Downloads/fun/img/'
+#folder = r'C:/Users/chenj/Downloads/fun/img/'
+folder = r'D:/User Files/Personal/Cloud Drive/MEGAsync/Sensitive/Photos Backup/takeout-20200103T014318Z-001/Takeout/Google Photos/'
 # Absolute path to save logs
 LOG_PATH = r'C:/Users/chenj/Downloads/fun/logs/'
 ########################## SETTING VARIABLES ########################################
@@ -166,7 +173,8 @@ def guess_ext_type(fname: str) -> str:
         return ".mov"
     return None
 
-def sankaku_bad_src(driver:Firefox, src:str) -> bool:
+
+def sankaku_bad_src(driver: Firefox, src: str) -> bool:
     if("https://s.sankakucomplex.com/images/channel-dark-logo.png" in src):
         print("src loaded unproperly, refreshing window", flush=True)
         driver.get(driver.current_url)
@@ -174,28 +182,32 @@ def sankaku_bad_src(driver:Firefox, src:str) -> bool:
         return False
     return True
 
-def selenium_save_sankaku(driver:Firefox, src:str, url:str, downloadExt:str, req:urllib.request.Request, ssize:int, resp)->None:
+
+def selenium_save_sankaku(driver: Firefox, src: str, url: str, downloadExt: str, req: urllib.request.Request, ssize: int, resp) -> None:
     CHUNK = 16 * 1024
     print("Saving: ", src, flush=True)
     c = False
     while c == False:
         with open(folder + sankaku_postid_strip(url) + downloadExt, "wb") as fd:
             #downloaded = False
-            #while downloaded == False:
+            # while downloaded == False:
             #    chunk = resp.read(CHUNK)
             #    if not chunk:
             #        downloaded = True
             #    fd.write(chunk)
             fd.write(resp.read())
         fd.close()
-        localSz = os.path.getsize(folder + sankaku_postid_strip(url) + downloadExt)
+        localSz = os.path.getsize(
+            folder + sankaku_postid_strip(url) + downloadExt)
         if localSz == ssize:
             c == True
         else:
-            print("local size: ", str(localSz), " server size: ", str(ssize), flush=True)
+            print("local size: ", str(localSz),
+                  " server size: ", str(ssize), flush=True)
             driver.get(driver.current_url)
             print("Restarting download in ", HTTP_ERROR_TIMEOUT, " seconds")
             time.sleep(HTTP_ERROR_TIMEOUT)
+
 
 def selenium_save_with_url(driver: Firefox, url: str, xpath: str, downloadExt: str) -> bool:
     """
@@ -229,9 +241,9 @@ def selenium_save_with_url(driver: Firefox, url: str, xpath: str, downloadExt: s
     while not okay:
         try:
             req = urllib.request.Request(src,
-                                        headers={
-                                            'User-agent':
-                                            'Mozilla/5.0 (Windows NT 5.1; rv:43.0) Gecko/20100101 Firefox/43.0'})
+                                         headers={
+                                             'User-agent':
+                                             'Mozilla/5.0 (Windows NT 5.1; rv:43.0) Gecko/20100101 Firefox/43.0'})
             resp = urllib.request.urlopen(req)
             okay = True
         except urllib.error.URLError as e:
@@ -259,7 +271,8 @@ def selenium_save_with_url(driver: Firefox, url: str, xpath: str, downloadExt: s
                 fd.write(resp.read())
                 downloaded = True
             except http.client.IncompleteRead:
-                print("Less bytes than expected, refreshing and resuming after 30 seconds")
+                print(
+                    "Less bytes than expected, refreshing and resuming after 30 seconds")
                 driver.get(driver.current_url)
                 time.sleep(25)
                 urllib.request.urlopen(req)
@@ -267,6 +280,7 @@ def selenium_save_with_url(driver: Firefox, url: str, xpath: str, downloadExt: s
             fd.close()
     imgNo += 1
     return True
+
 
 def write_to_log(logn: str, line: str) -> None:
     """
@@ -393,7 +407,7 @@ def selenium_network_test(driver: Firefox) -> bool:
                 'window.open("","_blank");')   # Try to open website in another tab
             # Close the opened window
             driver.switch_to.window(driver.window_handles[1])
-            driver.get("https://chan.sankakucomplex.com/")
+            driver.get("https://duckduckgo.com/")
             opened = True
             driver.close()
             # Return to previous window
@@ -418,7 +432,7 @@ def selenium_infscroll(driver: Firefox) -> None:
         driver: selenium window to scroll to the bottom of
     """
     print("Scrolling...", flush=True)
-    html = driver.find_element_by_tag_name('html')
+    html = driver.find_element(by=By.TAG_NAME, value='html')
     # Get scroll height
     last_height = driver.execute_script(
         "return window.pageYOffset + window.innerHeight")
@@ -438,12 +452,12 @@ def selenium_infscroll(driver: Firefox) -> None:
                     driver.get(driver.current_url)
                     time.sleep(5)
                     connected = True
-                    html = driver.find_element_by_tag_name('html')
+                    html = driver.find_element(by=By.TAG_NAME, value='html')
                 except WebDriverException:
                     selenium_network_test(driver)
         elif driver.execute_script("return window.pageYOffset + window.innerHeight") == 0:
-             driver.get(driver.current_url)
-             time.sleep(5)
+            driver.get(driver.current_url)
+            time.sleep(5)
         else:
             # Calculate new scroll height and compare with last scroll height
             new_height = driver.execute_script(
@@ -567,24 +581,39 @@ def selenium_download_all(driver: Firefox, linkQ: Queue) -> Firefox:
 
 def sankaku_remove_duplicates(urls: List[WebElement]) -> Queue:
     """
-    *** TO BE OVERHAULED ***\n
     Trims all duplicate links in urls vs what is in dir
-
+    TODO option to use index file instead of an actual directory
+        for initial dir building
     Param:
         urls: List[WebElement] containing sankaku links
     Return: Queue of non-dupe links only
     """
     linkQ = Queue(-1)
     dir = os.scandir(folder)        # Everything in folder
+    counter = 0
+    # Number of files in dir
+    for a in dir:
+        if(a.is_file()):
+            counter += 1
+
+    # Add dir contents to hash table
+    local = HashTable(counter)
+    dir.close()
+    dir = os.scandir(folder)
+
+    for file in dir:
+        if(file.is_file()):
+            tokens = file.name.split(".")   # Get file name before "."
+            local.hashtable_add(KVPair[str,str](tokens[0], tokens[0]))
+    dir.close()
+
+    # Add to queue items that do not exist in the hash table
     for a in urls:
         link = a.get_attribute('href')
         if("https://chan.sankakucomplex.com/post/show/" in link):
-            if not exists(dir, sankaku_postid_strip(link)):
+            pid = sankaku_postid_strip(link)
+            if local.hashtable_exist(KVPair[str,str](pid, pid)) == -1:
                 linkQ.put(link)
-            dir.close()
-            # Make new iterator and set at beginning
-            dir = os.scandir(folder)
-    dir.close()
     return linkQ
 
 
@@ -662,7 +691,8 @@ def main():
     print("Exiting Selenium...")
     driver.quit()
     end_time = time.monotonic()
-    print("Failed: ", str(failed), ", Stored in \"link - " + LOG_PATH + str(int(start_time)) + ".txt\"")
+    print("Failed: ", str(failed), ", Stored in \"link - " +
+          LOG_PATH + str(int(start_time)) + ".txt\"")
     print("Ran for ", timedelta(seconds=end_time - start_time))
 
 
