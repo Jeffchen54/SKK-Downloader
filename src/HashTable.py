@@ -3,7 +3,7 @@ from typing import TypeVar, Generic
 
 T = TypeVar('T')
 V = TypeVar('V')
-
+MINIMUM_SIZE = 2
 class Error(Exception):
     """Base class for other exceptions"""
     pass
@@ -121,13 +121,15 @@ class HashTable:
 
     def __init__(self, size):
         """
-        Construct a hash table with initial size
+        Construct a hash table with initial size. 
 
         Param:
             initialSize: Initial hash table size
         """
-        self.__size = size
-        self.__records = [None] * size
+        
+        
+        self.__size = max(size, MINIMUM_SIZE)
+        self.__records = [None] * self.__size
         self.__occupied = 0
 
     # Core Functions #################################################

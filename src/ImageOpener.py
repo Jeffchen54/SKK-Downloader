@@ -21,6 +21,8 @@ Compatible with Firefox only with dark mode settings
 - Add timeout where if a file fails to be downloaded, it is skipped and save to a log
 - Fixed several exceptions when downloading files
 - Overhauled duplicate file detector, massive performance boost for large directory file/download file count
+- 404 error edge case fixed
+- 
 - TODO bypass download limit
 - TODO read from index file instead of directory option
 - TODO CMD line options
@@ -39,7 +41,6 @@ from selenium.webdriver.common.keys import Keys
 from selenium.common.exceptions import WebDriverException
 import urllib.request
 from selenium.common.exceptions import TimeoutException
-from queue import Queue
 import keyboard
 from typing import List
 from selenium.webdriver.remote.webelement import WebElement
@@ -55,10 +56,10 @@ PROFILE_PATH = r'C:/Users/chenj/AppData/Roaming/Mozilla/Firefox/Profiles/8gtgo2s
 # Absolute path to temp folder, stores profiles used by threads
 TEMP_PATH = r'C:/Users/chenj\Downloads/fun/src/temp'
 # folder to save content to
-#folder = r'C:/Users/chenj/Downloads/fun/img/'
-folder = r'D:/User Files/Personal/Cloud Drive/MEGAsync/Sensitive/Photos Backup/takeout-20200103T014318Z-001/Takeout/Google Photos/'
+folder = r'C:/Users/chenj/Downloads/fun/img/'
 # Absolute path to save logs
 LOG_PATH = r'C:/Users/chenj/Downloads/fun/logs/'
+BACKUP_PATH = r'C:/Users/chenj/Downloads/fun/backup/'
 ########################## SETTING VARIABLES ########################################
 # Maximum number of times a window can timeout before using failsafe measures
 MAXNUMTIMEOUT = 5
@@ -75,10 +76,13 @@ LINK_LOAD_TIME = 10         # Amount of time to wait after a link is opened
 MINIMIZE = False
 SCROLL_CONFIRMATION = False  # Require user confirmation when scrolling is complete
 HTTP_ERROR_TIMEOUT = 30      # Seconds to wait before for HTTP error
+LOAD_BACKUP = True
+BACKUP_FILE = r'C:/Users/chenj/Downloads/fun/backup/urls - 540607.txt'
 #######################################################################################################
 imgNo: int = 1   # Used to check if a file is downloaded
 start_time: float  # when the program started
 failed: int = 0  # Number of failed files
+
 
 
 class Error(Exception):
@@ -174,40 +178,32 @@ def guess_ext_type(fname: str) -> str:
     return None
 
 
-def sankaku_bad_src(driver: Firefox, src: str) -> bool:
-    if("https://s.sankakucomplex.com/images/channel-dark-logo.png" in src):
+def sankaku_bad_src(driver: Firefox, src: str, url:str) -> bool:
+    """
+    Fixes any possible conflicts associated with a sankaku src pointer to image
+    - If loading conflict exists, refresh until resolved
+    - If 404 error encountered, write to log
+
+    Param:
+        driver: current driver
+        src: pointer to image
+    Return: True if conflict is resolved, false if conflict could not be resolved.
+    """
+    global failed
+
+    # Check if image does not exist
+    if("404" in src):
+        print("404 - Image no longer in sankaku servers", flush=True)
+        write_to_log("link - " + str(int(start_time)) + ".txt", url)
+        failed += 1
+        return False
+
+    while "https://s.sankakucomplex.com/images/channel-dark-logo.png" in src:
         print("src loaded unproperly, refreshing window", flush=True)
         driver.get(driver.current_url)
         time.sleep(15)
-        return False
+
     return True
-
-
-def selenium_save_sankaku(driver: Firefox, src: str, url: str, downloadExt: str, req: urllib.request.Request, ssize: int, resp) -> None:
-    CHUNK = 16 * 1024
-    print("Saving: ", src, flush=True)
-    c = False
-    while c == False:
-        with open(folder + sankaku_postid_strip(url) + downloadExt, "wb") as fd:
-            #downloaded = False
-            # while downloaded == False:
-            #    chunk = resp.read(CHUNK)
-            #    if not chunk:
-            #        downloaded = True
-            #    fd.write(chunk)
-            fd.write(resp.read())
-        fd.close()
-        localSz = os.path.getsize(
-            folder + sankaku_postid_strip(url) + downloadExt)
-        if localSz == ssize:
-            c == True
-        else:
-            print("local size: ", str(localSz),
-                  " server size: ", str(ssize), flush=True)
-            driver.get(driver.current_url)
-            print("Restarting download in ", HTTP_ERROR_TIMEOUT, " seconds")
-            time.sleep(HTTP_ERROR_TIMEOUT)
-
 
 def selenium_save_with_url(driver: Firefox, url: str, xpath: str, downloadExt: str) -> bool:
     """
@@ -226,15 +222,12 @@ def selenium_save_with_url(driver: Firefox, url: str, xpath: str, downloadExt: s
     Raise: UnknownFileTypeException when file type cannot be determined
     """
     global imgNo
+    global failed
     l = driver.find_element(By.XPATH, xpath)
     src = l.get_attribute('src')
 
     # Check if error image is loaded
-    if("https://s.sankakucomplex.com/images/channel-dark-logo.png" in src):
-        print("src loaded unproperly, refreshing window", flush=True)
-        driver.refresh()
-        time.sleep(5)
-        return False
+    sankaku_bad_src(driver, src, url)
 
     # Set headers and grab file at the source
     okay = False
@@ -246,7 +239,7 @@ def selenium_save_with_url(driver: Firefox, url: str, xpath: str, downloadExt: s
                                              'Mozilla/5.0 (Windows NT 5.1; rv:43.0) Gecko/20100101 Firefox/43.0'})
             resp = urllib.request.urlopen(req)
             okay = True
-        except urllib.error.URLError as e:
+        except (urllib.error.URLError, HTTPError) as e:
             print("Not found error, restarting in 30 seconds")
             print(e)
             driver.get(driver.current_url)
@@ -542,7 +535,7 @@ def sankaku_url_set_next(url: str, postid: str) -> str:
     return tokens[0] + "?next=" + postid + "&" + tokens[1]
 
 
-def selenium_download_all(driver: Firefox, linkQ: Queue) -> Firefox:
+def selenium_download_all(driver: Firefox, linkQ: List[str]) -> Firefox:
     """
     Downloads all links stored in linkQ
 
@@ -552,9 +545,9 @@ def selenium_download_all(driver: Firefox, linkQ: Queue) -> Firefox:
     Return driver
     Post: active driver may be different after execution
     """
-    while(linkQ.empty() == False):
+    while(len(linkQ) != 0):
         try:
-            url = str(linkQ.get())
+            url = linkQ.pop()
             print("Opening: ", url, flush=True)
             driver.execute_script(
                 'window.open("{}","_blank");'.format(url))
@@ -574,12 +567,12 @@ def selenium_download_all(driver: Firefox, linkQ: Queue) -> Firefox:
                 "Connection loss detected, sleeping for 30 seconds", flush=True)
             driver.close()
             driver.switch_to.window(driver.window_handles[0])
-            linkQ.put(url)
+            linkQ.append(url)
             time.sleep(30)
     return driver
 
 
-def sankaku_remove_duplicates(urls: List[WebElement]) -> Queue:
+def sankaku_remove_duplicates(urls: List[WebElement]) -> List[str]:
     """
     Trims all duplicate links in urls vs what is in dir
     TODO option to use index file instead of an actual directory
@@ -588,7 +581,7 @@ def sankaku_remove_duplicates(urls: List[WebElement]) -> Queue:
         urls: List[WebElement] containing sankaku links
     Return: Queue of non-dupe links only
     """
-    linkQ = Queue(-1)
+    linkQ:List[str] = []
     dir = os.scandir(folder)        # Everything in folder
     counter = 0
     # Number of files in dir
@@ -600,7 +593,7 @@ def sankaku_remove_duplicates(urls: List[WebElement]) -> Queue:
     local = HashTable(counter)
     dir.close()
     dir = os.scandir(folder)
-
+    
     for file in dir:
         if(file.is_file()):
             tokens = file.name.split(".")   # Get file name before "."
@@ -613,7 +606,7 @@ def sankaku_remove_duplicates(urls: List[WebElement]) -> Queue:
         if("https://chan.sankakucomplex.com/post/show/" in link):
             pid = sankaku_postid_strip(link)
             if local.hashtable_exist(KVPair[str,str](pid, pid)) == -1:
-                linkQ.put(link)
+                linkQ.append(link)
     return linkQ
 
 
@@ -630,6 +623,19 @@ def selenium_grab_sankaku_links(driver: Firefox) -> List[WebElement]:
     urls = driver.find_elements(by=By.XPATH, value='.//a')
     return urls
 
+def sankaku_backup_url(bn:str, linkQ:List[str])->None:
+    """
+    Saves Queue data to a file
+    """
+    backup_path = BACKUP_PATH + bn
+    if not os.path.exists(backup_path):
+        open(backup_path, 'a').close()
+    
+    with open(backup_path, "a") as myfile:
+        for url in linkQ:
+            myfile.write(url + "\n")
+    myfile.close()
+    print("Backed up urls in \"", backup_path, "\"\n", flush=True)
 
 def selenium_visit(driver: Firefox) -> Firefox:
     """
@@ -666,7 +672,8 @@ def selenium_visit(driver: Firefox) -> Firefox:
     # Grabbing urls ##########################################################
     urls = selenium_grab_sankaku_links(driver)  # get all urls
     linkQ = sankaku_remove_duplicates(urls)     # remove dupes
-    print(linkQ.qsize(), " urls to be processed", flush=True)
+    sankaku_backup_url("urls - " + str(int(start_time)) + ".txt", linkQ)
+    print(len(linkQ), " urls to be processed", flush=True)
 
     # While loop made here, as long as linkQ length != 0, loop
     # multithreading also done here after breaking queue up

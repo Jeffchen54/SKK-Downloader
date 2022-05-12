@@ -10,6 +10,10 @@ class KVTestCase(unittest.TestCase):
         """
         self.hashT = HashTable(100)
 
+    def test_construct(self):
+        self.hashT = HashTable(2)
+        self.assertEqual(2, self.hashT.hashtable_getSize())
+
     def test_hash_alg(self):
         """
         Tests hashing algorithm compared to real sfold hash results
@@ -72,6 +76,9 @@ class KVTestCase(unittest.TestCase):
         Tests exists() infinite loop detector
         exists is tested alongside delete() and add()
         """
+        # Empty exists()
+        self.assertEqual(-1, self.hashT.hashtable_exist(KVPair[int, str](47124367, "aaaa")))
+
         # 8 is a known size that bricks quadratic probe
         self.hashT = HashTable(8)
 
