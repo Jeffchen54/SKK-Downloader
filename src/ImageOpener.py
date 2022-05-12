@@ -24,6 +24,7 @@ Compatible with Firefox only with dark mode settings
 - 404 error edge case fixed
 - Blacklist 
 
+
 - TODO bypass download limit
 - TODO read from index file instead of directory option
 - TODO CMD line options
@@ -245,12 +246,11 @@ def selenium_save_with_url(driver: Firefox, url: str, xpath: str, downloadExt: s
             resp = urllib.request.urlopen(req)
             okay = True
         except (urllib.error.URLError, HTTPError) as e:
-            print("Not found error, restarting in 30 seconds")
-            print(e)
-            driver.get(driver.current_url)
-            time.sleep(25)
-            urllib.request.urlopen(req)
-            time.sleep(5)
+            print("404 error")
+            write_to_log("link - " + str(int(start_time)) + ".txt", url)
+            failed+=1
+            imgNo+=1
+            return False
 
     # determine source file type if unspecified
     if(downloadExt == None):
@@ -275,7 +275,7 @@ def selenium_save_with_url(driver: Firefox, url: str, xpath: str, downloadExt: s
                 time.sleep(25)
                 urllib.request.urlopen(req)
                 time.sleep(5)
-            fd.close()
+                
     imgNo += 1
     return True
 
