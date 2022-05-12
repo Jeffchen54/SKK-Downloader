@@ -22,7 +22,8 @@ Compatible with Firefox only with dark mode settings
 - Fixed several exceptions when downloading files
 - Overhauled duplicate file detector, massive performance boost for large directory file/download file count
 - 404 error edge case fixed
-- 
+- Blacklist 
+
 - TODO bypass download limit
 - TODO read from index file instead of directory option
 - TODO CMD line options
@@ -60,6 +61,8 @@ folder = r'C:/Users/chenj/Downloads/fun/img/'
 # Absolute path to save logs
 LOG_PATH = r'C:/Users/chenj/Downloads/fun/logs/'
 BACKUP_PATH = r'C:/Users/chenj/Downloads/fun/backup/'
+# Absolute path to blacklist
+BLKLST_PATH = r'C:/Users/chenj/Downloads/fun/src/blacklist.txt'
 ########################## SETTING VARIABLES ########################################
 # Maximum number of times a window can timeout before using failsafe measures
 MAXNUMTIMEOUT = 5
@@ -227,7 +230,9 @@ def selenium_save_with_url(driver: Firefox, url: str, xpath: str, downloadExt: s
     src = l.get_attribute('src')
 
     # Check if error image is loaded
-    sankaku_bad_src(driver, src, url)
+    if not sankaku_bad_src(driver, src, url):
+        imgNo+=1
+        return False
 
     # Set headers and grab file at the source
     okay = False
@@ -599,6 +604,13 @@ def sankaku_remove_duplicates(urls: List[WebElement]) -> List[str]:
             tokens = file.name.split(".")   # Get file name before "."
             local.hashtable_add(KVPair[str,str](tokens[0], tokens[0]))
     dir.close()
+
+    # Add blacklist contents to hash table
+    with open(BLKLST_PATH, 'r') as ls:
+        ids = ls.read()
+        tokens = ids.split(",")   # comma separate postIDs
+        for id in tokens:
+            local.hashtable_add(KVPair[str,str](id, id))
 
     # Add to queue items that do not exist in the hash table
     for a in urls:
