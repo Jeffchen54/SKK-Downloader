@@ -1,5 +1,6 @@
 # SKK-Downloader
-**Not meant for external use but free for any to download and play with, functionality is not guaranteed until version 1.0. Is on hiatus until mid may 2022**
+**Not meant for external use but free for any to download and play with, functionality is not guaranteed until version 1.0.**
+Project is discontinued, project will be redesigned to not use selenium and HandyImage and be fully command line based.
 
 Description:
 Project used to play around with python and download from Sankaku while bypassing numerous methods employed by Sankaku. Method is slower than other mass downloaders and only compatible with https://chan.sankakucomplex.com/?tags=rating%3Asafe&commit=Search
