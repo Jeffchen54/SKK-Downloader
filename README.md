@@ -2,6 +2,8 @@
 **Not meant for external use but free for any to download and play with, functionality is not guaranteed until version 1.0.**
 Project is discontinued, project will be redesigned to not use selenium and HandyImage and be fully command line based.
 
+Redesigned version -> https://github.com/Jeffchen54/SKK-Downloader-v2
+
 Description:
 Project used to play around with python and download from Sankaku while bypassing numerous methods employed by Sankaku. Method is slower than other mass downloaders and only compatible with https://chan.sankakucomplex.com/?tags=rating%3Asafe&commit=Search
 
